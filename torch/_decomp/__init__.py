@@ -46,12 +46,10 @@ meta_table = global_decomposition_table["meta"]
 
 def is_torch_decomp_decomposition(func: OpOverload) -> bool:
     decompositions = torch._decomp.decompositions
-    # Note that the function in the decomposition table might be
-    # different from the one in the module because of the difference
-    # in out handling in aten API and torch public API
-    return decomposition_table[func].__module__.startswith(
-        "torch._decomp"
-    ) and decomposition_table[func].__name__ in dir(decompositions)
+    # Out-parameter wrappers can differ from the function in the module.
+    fn = decomposition_table[func]
+    in_decomp_module = fn.__module__.startswith("torch._decomp")
+    return in_decomp_module and hasattr(decompositions, fn.__name__)
 
 
 def _should_decompose_because_unsafe_op(op: torch._ops.OperatorBase) -> bool:
