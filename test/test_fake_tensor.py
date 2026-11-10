@@ -6240,6 +6240,74 @@ class TestCppFakeTensorModeBindings(TestCase):
         self.assertIsNone(ref())
         self.assertEqual(self._installed(), (None, False))
 
+    @parametrize("inherited", [False, True])
+    def test_cpp_fake_tensor_mode_detection(self, inherited):
+        from concurrent.futures import ThreadPoolExecutor
+
+        from torch.utils._python_dispatch import is_in_torch_dispatch_mode
+
+        self.addCleanup(self._restore_fake_mode_state)
+        mode = CppFakeTensorMode()
+        self.assertFalse(is_in_torch_dispatch_mode())
+        if inherited:
+            torch._C._set_dispatch_mode(mode)
+        with mode:
+            self.assertTrue(is_in_torch_dispatch_mode())
+            with unset_fake_temporarily():
+                self.assertTrue(is_in_torch_dispatch_mode())
+            with ThreadPoolExecutor(max_workers=1) as pool:
+                self.assertFalse(pool.submit(is_in_torch_dispatch_mode).result())
+        self.assertEqual(is_in_torch_dispatch_mode(), inherited)
+        if inherited:
+            torch._C._unset_dispatch_mode(torch._C._TorchDispatchModeKey.FAKE)
+        self.assertFalse(is_in_torch_dispatch_mode())
+
+        with self.assertRaisesRegex(ValueError, "unwind"), mode:
+            raise ValueError("unwind")
+        self.assertFalse(is_in_torch_dispatch_mode())
+
+        mode.__enter__()
+        torch._C._unset_dispatch_mode(torch._C._TorchDispatchModeKey.FAKE)
+        with self.assertRaisesRegex(RuntimeError, "Attempted to unset"):
+            mode.__exit__(None, None, None)
+        self.assertFalse(is_in_torch_dispatch_mode())
+
+    @skipIfTorchDynamo("uses torch.compile")
+    def test_is_in_torch_dispatch_mode_compiles(self):
+        # Dynamo traces with the C++ mode suspended, but folds the check to the
+        # state the frame was entered with, guarded, rather than graph-breaking
+        # or recompiling on every call
+        from torch.utils._python_dispatch import is_in_torch_dispatch_mode
+
+        self.addCleanup(self._restore_fake_mode_state)
+
+        @torch.compile(backend="eager", fullgraph=True)
+        def f():
+            return is_in_torch_dispatch_mode()
+
+        self.assertFalse(f())
+        mode = CppFakeTensorMode()
+        with mode:
+            self.assertTrue(f())
+            with torch._dynamo.config.patch(error_on_recompile=True):
+                self.assertTrue(f())
+        with torch._dynamo.config.patch(error_on_recompile=True):
+            self.assertFalse(f())
+
+        # Also for a mode installed without entering it, as on a thread that
+        # inherited it, traced first in that state
+        @torch.compile(backend="eager", fullgraph=True)
+        def g():
+            return is_in_torch_dispatch_mode()
+
+        torch._C._set_dispatch_mode(mode)
+        try:
+            self.assertTrue(g())
+            with torch._dynamo.config.patch(error_on_recompile=True):
+                self.assertTrue(g())
+        finally:
+            torch._C._unset_dispatch_mode(torch._C._TorchDispatchModeKey.FAKE)
+
 
 if __name__ == "__main__":
     run_tests()
