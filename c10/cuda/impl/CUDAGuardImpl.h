@@ -14,7 +14,12 @@
 #include <c10/core/DeviceType.h>
 #include <c10/core/Stream.h>
 #include <c10/core/impl/PyInterpreter.h>
+// VEGA-PATCH 37 T01:27: redirect cuda_runtime_api a hip su USE_ROCM
+#ifdef USE_ROCM
+#include <hip/hip_runtime_api.h>
+#else
 #include <cuda_runtime_api.h>
+#endif
 #include <cstdint>
 #include <optional>
 

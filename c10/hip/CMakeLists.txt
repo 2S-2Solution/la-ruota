@@ -37,6 +37,15 @@ if(NOT BUILD_LIBTORCHLESS)
   # Propagate HIP_CXX_FLAGS that were set from Dependencies.cmake
   target_compile_options(c10_hip PRIVATE ${HIP_CXX_FLAGS})
 
+  # [VEGA-PATCH 12 T09:46 18 giu] Force include shim MSVC builtins (__builtin_clz/ctz/popcount)
+  # Header HIP ROCm 6.1 (amd_hip_vector_types.h) usano builtin GCC/clang.
+  # MSVC cl.exe non li riconosce. Lo shim li definisce via intrin.h _BitScan*.
+  # [VEGA-PATCH 12b T03:50 20 giu] Escludo clang-cl: ha già builtin GCC, redefiniscili → conflict
+  # → next_pot constexpr fail "no return statement" cascata. Solo cl.exe puro.
+  if(MSVC AND NOT (CMAKE_CXX_COMPILER_ID STREQUAL "Clang"))
+    target_compile_options(c10_hip PRIVATE "/FI${CMAKE_CURRENT_SOURCE_DIR}/impl/vega_msvc_builtins.h")
+  endif()
+
   # caffe2_hip adds a bunch of dependencies like rocsparse, but c10/hip is supposed to be
   # minimal.  I'm not sure if we need hip_hcc or not; for now leave it out
 

@@ -1,6 +1,6 @@
 #pragma once
 
-#include <cuda_runtime_api.h>
+#include <hip/hip_runtime_api.h>
 
 #include <c10/core/DeviceGuard.h>
 #include <c10/core/Stream.h>

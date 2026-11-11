@@ -1,7 +1,13 @@
 #pragma once
 
+// VEGA-PATCH 36 T01:26: redirect cublas/cusparse a hip equivalenti su USE_ROCM
+#ifdef USE_ROCM
+#include <hipblas/hipblas.h>
+#include <hipsparse/hipsparse.h>
+#else
 #include <cublas_v2.h>
 #include <cusparse.h>
+#endif
 #include <c10/macros/Export.h>
 
 #ifdef CUDART_VERSION

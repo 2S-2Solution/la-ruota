@@ -28,7 +28,7 @@ void destroyMIOpenHandle(miopenHandle_t handle) {
 // #endif
 }
 
-using MIOpenPoolType = at::cuda::DeviceThreadHandlePool<miopenHandle_t, createMIOpenHandle, destroyMIOpenHandle>;
+using MIOpenPoolType = at::hip::DeviceThreadHandlePool<miopenHandle_t, createMIOpenHandle, destroyMIOpenHandle>;  // VEGA-PATCH 30 T21:50: at::cuda -> at::hip namespace fix
 
 } // namespace
 
@@ -46,7 +46,7 @@ miopenHandle_t getMiopenHandle() {
       pool->newPoolWindow());
 
   auto handle = myPoolWindow->reserve(device);
-  MIOPEN_CHECK(miopenSetStream(handle, at::hip::getCurrentHIPStream()));
+  MIOPEN_CHECK(miopenSetStream(handle, c10::hip::getCurrentHIPStream()));  // VEGA-PATCH 30 T21:50: at::hip -> c10::hip namespace fix
   return handle;
 }
 

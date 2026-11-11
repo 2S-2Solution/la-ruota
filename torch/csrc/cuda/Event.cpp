@@ -1,4 +1,4 @@
-#include <pybind11/pybind11.h>
+﻿#include <pybind11/pybind11.h>
 #include <torch/csrc/Device.h>
 #include <torch/csrc/THP.h>
 #include <torch/csrc/cuda/Event.h>
@@ -8,9 +8,9 @@
 #include <torch/csrc/utils/pycfunction_helpers.h>
 #include <torch/csrc/utils/python_arg_parser.h>
 
-#include <c10/cuda/CUDAGuard.h>
+#include <ATen/hip/impl/HIPGuardImplMasqueradingAsCUDA.h>
 
-#include <cuda_runtime_api.h>
+#include <hip/hip_runtime_api.h>
 #include <structmember.h>
 
 PyObject* THCPEventClass = nullptr;
@@ -45,11 +45,11 @@ static PyObject* THCPEvent_pynew(
   }
 
   THCPEvent* self = (THCPEvent*)ptr.get();
-  unsigned int flags = (blocking ? cudaEventBlockingSync : cudaEventDefault) |
-      (enable_timing ? cudaEventDefault : cudaEventDisableTiming) |
-      (interprocess ? cudaEventInterprocess : cudaEventDefault);
+  unsigned int flags = (blocking ? hipEventBlockingSync : hipEventDefault) |
+      (enable_timing ? hipEventDefault : hipEventDisableTiming) |
+      (interprocess ? hipEventInterprocess : hipEventDefault);
 
-  new (&self->cuda_event) at::cuda::CUDAEvent(flags);
+  new (&self->cuda_event) at::hip::HIPEvent(flags);
 
   return (PyObject*)ptr.release();
   END_HANDLE_TH_ERRORS
@@ -72,9 +72,9 @@ static PyObject* THCPEvent_from_ipc_handle(
   std::string handle_string = r.string(1);
 
   TORCH_CHECK(
-      handle_string.size() == sizeof(cudaIpcEventHandle_t),
-      "cudaIpcEventHandle_t expects byte-like object of size ",
-      sizeof(cudaIpcEventHandle_t),
+      handle_string.size() == sizeof(hipIpcEventHandle_t),
+      "hipIpcEventHandle_t expects byte-like object of size ",
+      sizeof(hipIpcEventHandle_t),
       ", but got ",
       handle_string.size());
   TORCH_CHECK(
@@ -90,9 +90,9 @@ static PyObject* THCPEvent_from_ipc_handle(
   THCPEvent* self = (THCPEvent*)ptr.get();
 
   // NOLINTNEXTLINE(cppcoreguidelines-init-variables)
-  cudaIpcEventHandle_t handle;
+  hipIpcEventHandle_t handle;
   std::memcpy(&handle, handle_string.c_str(), handle_string.size());
-  new (&self->cuda_event) at::cuda::CUDAEvent(device.index(), &handle);
+  new (&self->cuda_event) at::hip::HIPEvent(device.index(), &handle);
 
   return (PyObject*)ptr.release();
   END_HANDLE_TH_ERRORS
@@ -101,7 +101,7 @@ static PyObject* THCPEvent_from_ipc_handle(
 static void THCPEvent_dealloc(THCPEvent* self) {
   {
     pybind11::gil_scoped_release no_gil{};
-    self->cuda_event.~CUDAEvent();
+    self->cuda_event.~HIPEvent();
   }
   Py_TYPE(self)->tp_free((PyObject*)self);
 }
@@ -127,7 +127,7 @@ static PyObject* THCPEvent_record(PyObject* _self, PyObject* _stream) {
     auto self = (THCPEvent*)_self;
     auto stream = (THCPStream*)_stream;
     pybind11::gil_scoped_release no_gil{};
-    self->cuda_event.record(stream->cuda_stream);
+    self->cuda_event.record(stream->cuda_stream.hip_stream());
   }
   Py_RETURN_NONE;
   END_HANDLE_TH_ERRORS
@@ -138,7 +138,7 @@ static PyObject* THCPEvent_wait(PyObject* _self, PyObject* _stream) {
     auto self = (THCPEvent*)_self;
     auto stream = (THCPStream*)_stream;
     pybind11::gil_scoped_release no_gil{};
-    self->cuda_event.block(stream->cuda_stream);
+    self->cuda_event.block(stream->cuda_stream.hip_stream());
   }
   Py_RETURN_NONE;
   END_HANDLE_TH_ERRORS
@@ -173,7 +173,7 @@ static PyObject* THCPEvent_ipc_handle(PyObject* _self, PyObject* noargs) {
   HANDLE_TH_ERRORS
   auto self = (THCPEvent*)_self;
   // NOLINTNEXTLINE(cppcoreguidelines-init-variables)
-  cudaIpcEventHandle_t handle;
+  hipIpcEventHandle_t handle;
   self->cuda_event.ipc_handle(&handle);
   return PyBytes_FromStringAndSize((const char*)&handle, sizeof(handle));
   END_HANDLE_TH_ERRORS

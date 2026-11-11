@@ -23,6 +23,10 @@
 #include <ATen/ops/_log_softmax_backward_data_cuda_dispatch.h>
 #include <ATen/ops/_softmax_cuda_dispatch.h>
 #include <ATen/ops/_softmax_backward_data_cuda_dispatch.h>
+#include <ATen/ops/_sparse_log_softmax_backward_data_native.h>
+#include <ATen/ops/_sparse_log_softmax_native.h>
+#include <ATen/ops/_sparse_softmax_backward_data_native.h>
+#include <ATen/ops/_sparse_softmax_native.h>
 #include <ATen/ops/equal_native.h>
 #include <ATen/ops/full.h>
 #include <ATen/ops/softmax.h>

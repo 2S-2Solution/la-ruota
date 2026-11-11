@@ -1,499 +1,267 @@
-![PyTorch Logo](https://github.com/pytorch/pytorch/raw/main/docs/source/_static/img/pytorch-logo-dark.png)
+# La Ruota — PyTorch ROCm nativo su Windows per Radeon VII (gfx906)
 
---------------------------------------------------------------------------------
+**2S · 2Solution** · fork di [pytorch/pytorch](https://github.com/pytorch/pytorch) ·
+[English below](#english)
 
-PyTorch is a Python package that provides two high-level features:
-- Tensor computation (like NumPy) with strong GPU acceleration
-- Deep neural networks built on a tape-based autograd system
+> Il README originale di PyTorch è in [README-PyTorch.md](README-PyTorch.md).
+> PyTorch è opera di Meta Platforms e dei suoi contributori (licenza BSD-3, [LICENSE](LICENSE)).
 
-You can reuse your favorite Python packages such as NumPy, SciPy, and Cython to extend PyTorch when needed.
+## Cosa fa
 
-Our trunk health (Continuous Integration signals) can be found at [hud.pytorch.org](https://hud.pytorch.org/ci/pytorch/pytorch/main).
+**La Ruota** è PyTorch **2.5.1** compilato **in modo nativo per ROCm su Windows** per la
+AMD **Radeon VII** (Vega 20, **gfx906**), una scheda che AMD non supporta più su Windows e
+per la quale non esistono wheel ufficiali. Niente traduzione CUDA→HIP a runtime (come con
+ZLUDA): i kernel sono compilati per gfx906 e PyTorch chiama direttamente HIP, rocBLAS,
+rocSOLVER e MIOpen. Sullo stesso carico è circa **5 volte più veloce** del percorso via
+[zluda-gfx906](https://github.com/2s-2solution/zluda-gfx906).
 
-<!-- toc -->
+A quanto ci risulta, al momento della costruzione (agosto 2026) non esisteva alcuna build
+pubblica funzionante di PyTorch ROCm nativo su Windows per gfx906.
 
-- [More About PyTorch](#more-about-pytorch)
-  - [A GPU-Ready Tensor Library](#a-gpu-ready-tensor-library)
-  - [Dynamic Neural Networks: Tape-Based Autograd](#dynamic-neural-networks-tape-based-autograd)
-  - [Python First](#python-first)
-  - [Imperative Experiences](#imperative-experiences)
-  - [Fast and Lean](#fast-and-lean)
-  - [Extensions Without Pain](#extensions-without-pain)
-- [Installation](#installation)
-  - [Binaries](#binaries)
-    - [NVIDIA Jetson Platforms](#nvidia-jetson-platforms)
-  - [From Source](#from-source)
-    - [Prerequisites](#prerequisites)
-      - [NVIDIA CUDA Support](#nvidia-cuda-support)
-      - [AMD ROCm Support](#amd-rocm-support)
-      - [Intel GPU Support](#intel-gpu-support)
-    - [Get the PyTorch Source](#get-the-pytorch-source)
-    - [Install Dependencies](#install-dependencies)
-    - [Install PyTorch](#install-pytorch)
-      - [Adjust Build Options (Optional)](#adjust-build-options-optional)
-  - [Docker Image](#docker-image)
-    - [Using pre-built images](#using-pre-built-images)
-    - [Building the image yourself](#building-the-image-yourself)
-  - [Building the Documentation](#building-the-documentation)
-  - [Previous Versions](#previous-versions)
-- [Getting Started](#getting-started)
-- [Resources](#resources)
-- [Communication](#communication)
-- [Releases and Contributing](#releases-and-contributing)
-- [The Team](#the-team)
-- [License](#license)
+Il ramo `la-ruota-gfx906` parte dal tag **`v2.5.1`** (`a8d6afb511a69687bbb2b7e88a3cf67917e1697e`)
+e contiene:
 
-<!-- tocstop -->
+1. le modifiche ai sorgenti di PyTorch (CMake, ATen, c10, `torch/csrc`, `torch/__init__.py`),
+   ciascuna marcata con un commento `VEGA-PATCH <n>` (fino alla 84; la 85, che allinea
+   `torch/__init__.py` alla wheel pubblicata, non ha marcatore: il file è identico a quello
+   della wheel);
+2. **i file HIP generati da hipify e poi corretti a mano** (`aten/src/ATen/hip`,
+   `aten/src/ATen/native/hip`, `c10/hip`, …): la build compila questi `.hip`, non i `.cu`,
+   e su Windows hipify ha un difetto con i separatori di percorso che lo fa uscire con
+   successo senza scrivere nulla. Sono inclusi così come sono stati compilati;
+3. la cartella [`la-ruota/`](la-ruota/): guida, runbook di compilazione, script, banchi di
+   regressione e i kernel gfx906 scritti a mano usati da `ruota_flash` e `ruota_acceleratori`.
 
-## More About PyTorch
+## Hardware e software di prova
 
-[Learn the basics of PyTorch](https://pytorch.org/tutorials/beginner/basics/intro.html)
+| | |
+|---|---|
+| GPU | AMD Radeon VII, 16 GB HBM2 (gfx906, wave64); fp32 e **fp16** — gfx906 non ha istruzioni bf16 |
+| CPU | AMD Ryzen 9 5950X (per la parte CPU con MKL) |
+| sistema | Windows 10/11, driver AMD Adrenalin (runtime HIP 5.7 in `System32\amdhip64.dll`) |
+| toolchain (solo per compilare) | HIP SDK **5.7** per Windows + kit [rocm-marconi](https://github.com/2s-2solution/rocm-marconi) (clang 21, shim HIP); build di TheRock per gfx906; Visual Studio Build Tools 2022; CMake 3.31; Ninja; Python 3.12 |
+| librerie | rocBLAS/rocSOLVER 5.7; **MIOpen 3.5.2** ricompilata con le patch di [miopen-gfx906](https://github.com/2s-2solution/miopen-gfx906); Intel MKL statico (CPU) |
 
-At a granular level, PyTorch is a library that consists of the following components:
+## Risultati misurati
 
-| Component | Description |
-| ---- | --- |
-| [**torch**](https://pytorch.org/docs/stable/torch.html) | A Tensor library like NumPy, with strong GPU support |
-| [**torch.autograd**](https://pytorch.org/docs/stable/autograd.html) | A tape-based automatic differentiation library that supports all differentiable Tensor operations in torch |
-| [**torch.jit**](https://pytorch.org/docs/stable/jit.html) | A compilation stack (TorchScript) to create serializable and optimizable models from PyTorch code  |
-| [**torch.nn**](https://pytorch.org/docs/stable/nn.html) | A neural networks library deeply integrated with autograd designed for maximum flexibility |
-| [**torch.multiprocessing**](https://pytorch.org/docs/stable/multiprocessing.html) | Python multiprocessing, but with magical memory sharing of torch Tensors across processes. Useful for data loading and Hogwild training |
-| [**torch.utils**](https://pytorch.org/docs/stable/data.html) | DataLoader and other utility functions for convenience |
+Banco unico `la-ruota/workspace/regressione_completa.py`, 22 ottobre 2026 (patch 83),
+GPU libera; log completo in
+[`regressione_completa_2026_10_22_p83.log`](la-ruota/workspace/regressione_completa_2026_10_22_p83.log):
 
-Usually, PyTorch is used either as:
+| banco | esito |
+|---|---|
+| GEMM fp16 | **10,96 TFLOPS** |
+| convoluzioni MIOpen (9 prove), CNN 5 passi | tutte corrette; pesi uguali alla CPU entro 1,2·10⁻⁷ |
+| reti ricorrenti, 13 varianti; LSTM all'indietro ripetuti | 13 / 13; 7 / 7 |
+| RNN multistrato in MIOpen (LSTM 2×256, lotto 32, 64 passi) | 10 / 10, **12,6 ms contro 62,3 ms** del percorso nativo (4,93x) |
+| censimento delle operazioni GPU | **98 / 98** |
+| algebra lineare su tensori GPU (rocSOLVER; `eigh` e `svd` su MKL CPU, VEGA-PATCH 81) | 20 / 20; cholesky e lstsq 63 / 63; eigh e svd 93 / 93; n da 16 a 512: 13 / 13 |
+| softmax / log_softmax, 3 tipi, avanti e indietro | 13 / 13 |
+| stream ed eventi multipli; `torch.cuda` in TorchScript | 9 / 9; 2 / 2 |
+| CPU con MKL, LAPACK, numpy 2 | 21 / 21; matmul fp32 4096 a 317 GFLOPS |
+| flash attention (B2 H16 S2048 D128 causale, avanti+indietro) | 11 / 11; **25,5 ms / 146 MB contro 49,6 ms / 2.162 MB** (1,94x) |
+| conv 1×1 con stride al cambio di lotto | corretta (scarto ≤ 1,7·10⁻⁷) |
 
-- A replacement for NumPy to use the power of GPUs.
-- A deep learning research platform that provides maximum flexibility and speed.
+Altri numeri dal diario di lavoro: LoRA fp16 su Qwen3.5-4B a 1024 token da 182 a **562
+token/s** con `ruota_acceleratori` (Gated DeltaNet e flash attention gfx906); `copy_`
+trasposto fp16 4096×8192 da 3,3 a **638 GB/s**, identico bit a bit.
 
-Elaborating Further:
+## Requisiti a runtime
 
-### A GPU-Ready Tensor Library
+Per **usare** La Ruota (dal pacchetto della pagina Releases) servono solo:
 
-If you use NumPy, then you have used Tensors (a.k.a. ndarray).
+| | provato |
+|---|---|
+| GPU | AMD Radeon VII (gfx906): è l'unica provata |
+| sistema | Windows 10 Pro 22H2 (build 19045), 64 bit |
+| driver | AMD Software 25.Q3 (31.0.21923.11000), che fornisce `System32\amdhip64.dll`. Non è incluso |
+| Python | 3.12 a 64 bit (la wheel è solo per 3.12) |
+| VC++ | Microsoft Visual C++ Redistributable 2015-2022 x64 |
 
-![Tensor illustration](./docs/source/_static/img/tensor_illustration.png)
+**Non** servono ZLUDA, il kit rocm-marconi, l'HIP SDK né ROCm 7.1: la wheel porta in
+`torch\lib` le librerie ROCm 5.7, MIOpen corretta, hipRTC e COMgr di ROCm 7.1 e gli shim.
+I sorgenti degli shim sono pubblici: `hiprtc07013.dll` e `amd_cmgr3.dll` in
+[miopen-gfx906/shim](https://github.com/2s-2solution/miopen-gfx906/tree/main/shim),
+`amdhip64_7.dll` in [rocm-marconi](https://github.com/2s-2solution/rocm-marconi)
+(`runtime/src/shim_main.c`).
 
-PyTorch provides Tensors that can live either on the CPU or the GPU and accelerates the
-computation by a huge amount.
+### Da dove vengono le DLL di `torch\lib`
 
-We provide a wide variety of tensor routines to accelerate and fit your scientific computation needs
-such as slicing, indexing, mathematical operations, linear algebra, reductions.
-And they are fast!
+La wheel è autosufficiente: come la wheel ufficiale porta cuDNN, questa porta MIOpen e le
+librerie ROCm. Questo repository contiene solo PyTorch; le altre DLL vengono da qui:
 
-### Dynamic Neural Networks: Tape-Based Autograd
+| DLL in `torch\lib` | origine |
+|---|---|
+| `torch_*.dll`, `c10*.dll`, `caffe2_nvrtc.dll`, `shm.dll`, `torch.dll` | questo repository (build di PyTorch) |
+| `MIOpen.dll`, `hiprtc07013.dll`, `amd_cmgr3.dll` | [miopen-gfx906](https://github.com/2s-2solution/miopen-gfx906): MIOpen 3.5.2 con le patch e i due shim |
+| `hiprtc0701.dll`, `hiprtc-builtins0701.dll`, `amd_comgr0701.dll`, `amd_comgr_3.dll` | ROCm 7.1 di AMD, file identici (servono agli shim di miopen-gfx906) |
+| `amdhip64_7.dll`, `hipblaslt.dll`, `libhipblaslt.dll`, `hiprtc-builtins07013.dll` | [rocm-marconi](https://github.com/2s-2solution/rocm-marconi): shim HIP con il ponte sullo stream nullo, hipBLASLt |
+| `rocblas.dll` e `rocblas\library\`, `rocsolver.dll`, `rocsparse.dll`, `rocfft.dll`, `hipblas.dll`, `hipfft.dll`, `hipsolver.dll`, `libhipsparse.dll`, `hiprtc0507.dll`, `amd_comgr0507.dll` | HIP SDK 5.7 di AMD; alcuni file della libreria Tensile sono instradati per gfx906 (guida, B1) |
+| `uv.dll` | libuv (MIT), costruita da `la-ruota/workspace/costruisci_libuv.cmd` |
+| `libiomp5md.dll` | non inclusa: la installa pip dal pacchetto `intel-openmp` |
 
-PyTorch has a unique way of building neural networks: using and replaying a tape recorder.
+Il runtime HIP (`amdhip64.dll`) è quello del driver e non è incluso.
 
-Most frameworks such as TensorFlow, Theano, Caffe, and CNTK have a static view of the world.
-One has to build a neural network and reuse the same structure again and again.
-Changing the way the network behaves means that one has to start from scratch.
+## Installazione rapida
 
-With PyTorch, we use a technique called reverse-mode auto-differentiation, which allows you to
-change the way your network behaves arbitrarily with zero lag or overhead. Our inspiration comes
-from several research papers on this topic, as well as current and past work such as
-[torch-autograd](https://github.com/twitter/torch-autograd),
-[autograd](https://github.com/HIPS/autograd),
-[Chainer](https://chainer.org), etc.
+Per installare senza compilare, scaricare il pacchetto autoestraente dalla pagina
+**[Releases](https://github.com/2s-2solution/la-ruota/releases)** e verificarne lo SHA256
+pubblicato accanto. I pacchetti binari non sono nel repository git.
 
-While this technique is not unique to PyTorch, it's one of the fastest implementations of it to date.
-You get the best of speed and flexibility for your crazy research.
+## Compilare da sorgente
 
-![Dynamic graph](https://github.com/pytorch/pytorch/raw/main/docs/source/_static/img/dynamic_graph.gif)
+La build **non è portabile così com'è**: gli script e alcuni file CMake del ramo
+(`cmake/public/LoadHIP.cmake`, `cmake/Dependencies.cmake`, `cmake/Modules/Findmiopen.cmake`,
+`CMakeLists.txt`, `la-ruota/workspace/build_laruota_canonical.cmd`) contengono i percorsi
+della macchina di costruzione. Il modo più semplice è riprodurli identici; altrimenti vanno
+cambiati in quei file.
 
-### Python First
+Prerequisiti, tutti da preparare **prima** della build:
 
-PyTorch is not a Python binding into a monolithic C++ framework.
-It is built to be deeply integrated into Python.
-You can use it naturally like you would use [NumPy](https://www.numpy.org/) / [SciPy](https://www.scipy.org/) / [scikit-learn](https://scikit-learn.org) etc.
-You can write your new neural network layers in Python itself, using your favorite libraries
-and use packages such as [Cython](https://cython.org/) and [Numba](http://numba.pydata.org/).
-Our goal is to not reinvent the wheel where appropriate.
+| cosa | dove la cercano gli script | come si ottiene |
+|---|---|---|
+| HIP SDK 5.7 per Windows | `C:\Program Files\AMD\ROCm\5.7` | installatore AMD |
+| kit [rocm-marconi](https://github.com/2s-2solution/rocm-marconi) (clang 21, shim HIP) | `C:\rocm_5_7_expansion_pack` | dal suo repository |
+| ritocchi manuali al kit | `include\hip\hip_version.h` e `include\miopen\` | **VEGA-PATCH 28**: in `hip_version.h` `HIP_VERSION_MAJOR` 5→6 e `HIP_VERSION_MINOR` 7→4 (altrimenti gli header di hipBLASLt 7.x ridefiniscono i tipi); gli header di MIOpen li copia lo STEP 2 di `build_laruota_canonical.cmd` dall'albero di TheRock |
+| build di [TheRock](https://github.com/ROCm/TheRock) per gfx906 | `C:\TheRock_workspace\TheRock\build_gfx906` | serve per `dist\rocm` (hipBLASLt e hipblas-common 7.x, header BLAS) e per `artifacts\miopen_run_generic\ml-libs\MIOpen\stage` (header e import di MIOpen); MIOpen con le patch di [miopen-gfx906](https://github.com/2s-2solution/miopen-gfx906) |
+| libuv | `C:\LaRuota_workspace\libuv_install` (`libuv_ROOT`) | `la-ruota\workspace\costruisci_libuv.cmd`, dai sorgenti già nei sottomoduli. Senza, CMake spegne `USE_DISTRIBUTED` senza chiedere |
+| MKL statico | `C:\LaRuota_workspace\mkl_prefix` | `pip install --prefix C:\LaRuota_workspace\mkl_prefix mkl-static mkl-include intel-openmp` (VEGA-PATCH 65; solo statico) |
+| header di numpy 2 | `C:\LaRuota_workspace\numpy2_headers` | `pip install --target C:\LaRuota_workspace\numpy2_headers numpy==2.2.6` (VEGA-PATCH 65: `torch_python` contro numpy 2 regge 1.x e 2.x) |
+| strumenti | | Visual Studio Build Tools 2022 (x64), CMake 3.31, Ninja, Python 3.12 |
 
-### Imperative Experiences
+Poi:
 
-PyTorch is designed to be intuitive, linear in thought, and easy to use.
-When you execute a line of code, it gets executed. There isn't an asynchronous view of the world.
-When you drop into a debugger or receive error messages and stack traces, understanding them is straightforward.
-The stack trace points to exactly where your code was defined.
-We hope you never spend hours debugging your code because of bad stack traces or asynchronous and opaque execution engines.
-
-### Fast and Lean
-
-PyTorch has minimal framework overhead. We integrate acceleration libraries
-such as [Intel MKL](https://software.intel.com/mkl) and NVIDIA ([cuDNN](https://developer.nvidia.com/cudnn), [NCCL](https://developer.nvidia.com/nccl)) to maximize speed.
-At the core, its CPU and GPU Tensor and neural network backends
-are mature and have been tested for years.
-
-Hence, PyTorch is quite fast — whether you run small or large neural networks.
-
-The memory usage in PyTorch is extremely efficient compared to Torch or some of the alternatives.
-We've written custom memory allocators for the GPU to make sure that
-your deep learning models are maximally memory efficient.
-This enables you to train bigger deep learning models than before.
-
-### Extensions Without Pain
-
-Writing new neural network modules, or interfacing with PyTorch's Tensor API was designed to be straightforward
-and with minimal abstractions.
-
-You can write new neural network layers in Python using the torch API
-[or your favorite NumPy-based libraries such as SciPy](https://pytorch.org/tutorials/advanced/numpy_extensions_tutorial.html).
-
-If you want to write your layers in C/C++, we provide a convenient extension API that is efficient and with minimal boilerplate.
-No wrapper code needs to be written. You can see [a tutorial here](https://pytorch.org/tutorials/advanced/cpp_extension.html) and [an example here](https://github.com/pytorch/extension-cpp).
-
-
-## Installation
-
-### Binaries
-Commands to install binaries via Conda or pip wheels are on our website: [https://pytorch.org/get-started/locally/](https://pytorch.org/get-started/locally/)
-
-
-#### NVIDIA Jetson Platforms
-
-Python wheels for NVIDIA's Jetson Nano, Jetson TX1/TX2, Jetson Xavier NX/AGX, and Jetson AGX Orin are provided [here](https://forums.developer.nvidia.com/t/pytorch-for-jetson-version-1-10-now-available/72048) and the L4T container is published [here](https://catalog.ngc.nvidia.com/orgs/nvidia/containers/l4t-pytorch)
-
-They require JetPack 4.2 and above, and [@dusty-nv](https://github.com/dusty-nv) and [@ptrblck](https://github.com/ptrblck) are maintaining them.
-
-
-### From Source
-
-#### Prerequisites
-If you are installing from source, you will need:
-- Python 3.8 or later (for Linux, Python 3.8.1+ is needed)
-- A compiler that fully supports C++17, such as clang or gcc (gcc 9.4.0 or newer is required, on Linux)
-- Visual Studio or Visual Studio Build Tool on Windows
-
-\* PyTorch CI uses Visual C++ BuildTools, which come with Visual Studio Enterprise,
-Professional, or Community Editions. You can also install the build tools from
-https://visualstudio.microsoft.com/visual-cpp-build-tools/. The build tools *do not*
-come with Visual Studio Code by default.
-
-\* We highly recommend installing an [Anaconda](https://www.anaconda.com/download) environment. You will get a high-quality BLAS library (MKL) and you get controlled dependency versions regardless of your Linux distro.
-
-An example of environment setup is shown below:
-
-* Linux:
-
-```bash
-$ source <CONDA_INSTALL_DIR>/bin/activate
-$ conda create -y -n <CONDA_NAME>
-$ conda activate <CONDA_NAME>
-```
-
-* Windows:
-
-```bash
-$ source <CONDA_INSTALL_DIR>\Scripts\activate.bat
-$ conda create -y -n <CONDA_NAME>
-$ conda activate <CONDA_NAME>
-$ call "C:\Program Files\Microsoft Visual Studio\<VERSION>\Community\VC\Auxiliary\Build\vcvarsall.bat" x64
-```
-
-##### NVIDIA CUDA Support
-If you want to compile with CUDA support, [select a supported version of CUDA from our support matrix](https://pytorch.org/get-started/locally/), then install the following:
-- [NVIDIA CUDA](https://developer.nvidia.com/cuda-downloads)
-- [NVIDIA cuDNN](https://developer.nvidia.com/cudnn) v8.5 or above
-- [Compiler](https://gist.github.com/ax3l/9489132) compatible with CUDA
-
-Note: You could refer to the [cuDNN Support Matrix](https://docs.nvidia.com/deeplearning/cudnn/reference/support-matrix.html) for cuDNN versions with the various supported CUDA, CUDA driver and NVIDIA hardware
-
-If you want to disable CUDA support, export the environment variable `USE_CUDA=0`.
-Other potentially useful environment variables may be found in `setup.py`.
-
-If you are building for NVIDIA's Jetson platforms (Jetson Nano, TX1, TX2, AGX Xavier), Instructions to install PyTorch for Jetson Nano are [available here](https://devtalk.nvidia.com/default/topic/1049071/jetson-nano/pytorch-for-jetson-nano/)
-
-##### AMD ROCm Support
-If you want to compile with ROCm support, install
-- [AMD ROCm](https://rocm.docs.amd.com/en/latest/deploy/linux/quick_start.html) 4.0 and above installation
-- ROCm is currently supported only for Linux systems.
-
-If you want to disable ROCm support, export the environment variable `USE_ROCM=0`.
-Other potentially useful environment variables may be found in `setup.py`.
-
-##### Intel GPU Support
-If you want to compile with Intel GPU support, follow these
-- [PyTorch Prerequisites for Intel GPUs](https://www.intel.com/content/www/us/en/developer/articles/tool/pytorch-prerequisites-for-intel-gpus.html) instructions.
-- Intel GPU is supported for Linux and Windows.
-
-If you want to disable Intel GPU support, export the environment variable `USE_XPU=0`.
-Other potentially useful environment variables may be found in `setup.py`.
-
-#### Get the PyTorch Source
-```bash
-git clone --recursive https://github.com/pytorch/pytorch
-cd pytorch
-# if you are updating an existing checkout
-git submodule sync
+```bat
+mkdir C:\LaRuota_workspace
+git clone -b la-ruota-gfx906 https://github.com/2s-2solution/la-ruota C:\LaRuota_workspace\pytorch_src
+cd C:\LaRuota_workspace\pytorch_src
 git submodule update --init --recursive
+cd third_party\kineto && git apply ..\..\la-ruota\patches\kineto-hip-platform-amd.patch && cd ..\..
+:: script e banchi nella cartella di lavoro
+xcopy /E /I la-ruota\workspace C:\LaRuota_workspace
+:: ambiente Python di build e compilazione (ore, non minuti)
+py -3.12 -m venv C:\LaRuota_workspace\venv_build
+C:\LaRuota_workspace\venv_build\Scripts\pip install -r requirements.txt -c C:\LaRuota_workspace\vincoli_ruota.txt
+C:\LaRuota_workspace\build_laruota_canonical.cmd verify
+C:\LaRuota_workspace\build_laruota_canonical.cmd build
 ```
 
-#### Install Dependencies
+`setup.py` non copia le DLL di runtime che la build non produce. Le copia
+`deploy_runtime_dlls.py`, che ne controlla l'impronta: MIOpen e i suoi shim dal pacchetto
+di miopen-gfx906, le librerie di ROCm 5.7, `amdhip64_7.dll` e hipBLASLt dal kit,
+`uv.dll` e `libiomp5md.dll`:
 
-**Common**
-
-```bash
-conda install cmake ninja
-# Run this command on native Windows
-conda install rust
-# Run this command from the PyTorch directory after cloning the source code using the “Get the PyTorch Source“ section below
-pip install -r requirements.txt
+```bat
+C:\LaRuota_workspace\venv_build\Scripts\python.exe C:\LaRuota_workspace\deploy_runtime_dlls.py ^
+  --torch-lib C:\LaRuota_workspace\venv_build\Lib\site-packages\torch\lib ^
+  --miopen <cartella bin del pacchetto miopen-gfx906> ^
+  --libuv C:\LaRuota_workspace\libuv_install --mkl C:\LaRuota_workspace\mkl_prefix\Library\bin
+:: verifica
+C:\LaRuota_workspace\venv_build\Scripts\python.exe C:\LaRuota_workspace\regressione_completa.py
 ```
 
-**On Linux**
+Cosa deve stare in `torch\lib`, e perché, è nella guida (sezione B1). La guida completa è in
+[la-ruota/docs/GUIDA_LA_RUOTA.md](la-ruota/docs/GUIDA_LA_RUOTA.md) (uso, regole, difetti
+noti, ricompilazione, banchi, cronologia delle patch). Il runbook in `la-ruota/docs/`
+(`BUILD_LARUOTA_RUNBOOK.md`) è **storico** (giugno-luglio 2026): descrive strade poi abbandonate.
 
-```bash
-pip install mkl-static mkl-include
-# CUDA only: Add LAPACK support for the GPU if needed
-conda install -c pytorch magma-cuda121  # or the magma-cuda* that matches your CUDA version from https://anaconda.org/pytorch/repo
+Uso:
 
-# (optional) If using torch.compile with inductor/triton, install the matching version of triton
-# Run from the pytorch directory after cloning
-# For Intel GPU support, please explicitly `export USE_XPU=1` before running command.
-make triton
+```python
+import torch
+print(torch.__version__, torch.cuda.is_available(), torch.cuda.get_device_name(0))
+# 2.5.0+gita8d6afb True AMD Radeon VII
 ```
 
-**On MacOS**
-
-```bash
-# Add this package on intel x86 processor machines only
-pip install mkl-static mkl-include
-# Add these packages if torch.distributed is needed
-conda install pkg-config libuv
-```
-
-**On Windows**
-
-```bash
-pip install mkl-static mkl-include
-# Add these packages if torch.distributed is needed.
-# Distributed package support on Windows is a prototype feature and is subject to changes.
-conda install -c conda-forge libuv=1.39
-```
-
-#### Install PyTorch
-**On Linux**
-
-If you would like to compile PyTorch with [new C++ ABI](https://gcc.gnu.org/onlinedocs/libstdc++/manual/using_dual_abi.html) enabled, then first run this command:
-```bash
-export _GLIBCXX_USE_CXX11_ABI=1
-```
-
-Please **note** that starting from PyTorch 2.5, the PyTorch build with XPU supports both new and old C++ ABIs. Previously, XPU only supported the new C++ ABI. If you want to compile with Intel GPU support, please follow [Intel GPU Support](#intel-gpu-support).
-
-If you're compiling for AMD ROCm then first run this command:
-```bash
-# Only run this if you're compiling for ROCm
-python tools/amd_build/build_amd.py
-```
-
-Install PyTorch
-```bash
-export CMAKE_PREFIX_PATH=${CONDA_PREFIX:-"$(dirname $(which conda))/../"}
-python setup.py develop
-```
-
-> _Aside:_ If you are using [Anaconda](https://www.anaconda.com/distribution/#download-section), you may experience an error caused by the linker:
->
-> ```plaintext
-> build/temp.linux-x86_64-3.7/torch/csrc/stub.o: file not recognized: file format not recognized
-> collect2: error: ld returned 1 exit status
-> error: command 'g++' failed with exit status 1
-> ```
->
-> This is caused by `ld` from the Conda environment shadowing the system `ld`. You should use a newer version of Python that fixes this issue. The recommended Python version is 3.8.1+.
-
-**On macOS**
-
-```bash
-python3 setup.py develop
-```
-
-**On Windows**
-
-If you want to build legacy python code, please refer to [Building on legacy code and CUDA](https://github.com/pytorch/pytorch/blob/main/CONTRIBUTING.md#building-on-legacy-code-and-cuda)
-
-**CPU-only builds**
-
-In this mode PyTorch computations will run on your CPU, not your GPU
-
-```cmd
-python setup.py develop
-```
-
-Note on OpenMP: The desired OpenMP implementation is Intel OpenMP (iomp). In order to link against iomp, you'll need to manually download the library and set up the building environment by tweaking `CMAKE_INCLUDE_PATH` and `LIB`. The instruction [here](https://github.com/pytorch/pytorch/blob/main/docs/source/notes/windows.rst#building-from-source) is an example for setting up both MKL and Intel OpenMP. Without these configurations for CMake, Microsoft Visual C OpenMP runtime (vcomp) will be used.
-
-**CUDA based build**
-
-In this mode PyTorch computations will leverage your GPU via CUDA for faster number crunching
-
-[NVTX](https://docs.nvidia.com/gameworks/content/gameworkslibrary/nvtx/nvidia_tools_extension_library_nvtx.htm) is needed to build Pytorch with CUDA.
-NVTX is a part of CUDA distributive, where it is called "Nsight Compute". To install it onto an already installed CUDA run CUDA installation once again and check the corresponding checkbox.
-Make sure that CUDA with Nsight Compute is installed after Visual Studio.
-
-Currently, VS 2017 / 2019, and Ninja are supported as the generator of CMake. If `ninja.exe` is detected in `PATH`, then Ninja will be used as the default generator, otherwise, it will use VS 2017 / 2019.
-<br/> If Ninja is selected as the generator, the latest MSVC will get selected as the underlying toolchain.
-
-Additional libraries such as
-[Magma](https://developer.nvidia.com/magma), [oneDNN, a.k.a. MKLDNN or DNNL](https://github.com/oneapi-src/oneDNN), and [Sccache](https://github.com/mozilla/sccache) are often needed. Please refer to the [installation-helper](https://github.com/pytorch/pytorch/tree/main/.ci/pytorch/win-test-helpers/installation-helpers) to install them.
-
-You can refer to the [build_pytorch.bat](https://github.com/pytorch/pytorch/blob/main/.ci/pytorch/win-test-helpers/build_pytorch.bat) script for some other environment variables configurations
-
-
-```cmd
-cmd
-
-:: Set the environment variables after you have downloaded and unzipped the mkl package,
-:: else CMake would throw an error as `Could NOT find OpenMP`.
-set CMAKE_INCLUDE_PATH={Your directory}\mkl\include
-set LIB={Your directory}\mkl\lib;%LIB%
-
-:: Read the content in the previous section carefully before you proceed.
-:: [Optional] If you want to override the underlying toolset used by Ninja and Visual Studio with CUDA, please run the following script block.
-:: "Visual Studio 2019 Developer Command Prompt" will be run automatically.
-:: Make sure you have CMake >= 3.12 before you do this when you use the Visual Studio generator.
-set CMAKE_GENERATOR_TOOLSET_VERSION=14.27
-set DISTUTILS_USE_SDK=1
-for /f "usebackq tokens=*" %i in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -version [15^,17^) -products * -latest -property installationPath`) do call "%i\VC\Auxiliary\Build\vcvarsall.bat" x64 -vcvars_ver=%CMAKE_GENERATOR_TOOLSET_VERSION%
-
-:: [Optional] If you want to override the CUDA host compiler
-set CUDAHOSTCXX=C:\Program Files (x86)\Microsoft Visual Studio\2019\Community\VC\Tools\MSVC\14.27.29110\bin\HostX64\x64\cl.exe
-
-python setup.py develop
-
-```
-
-##### Adjust Build Options (Optional)
-
-You can adjust the configuration of cmake variables optionally (without building first), by doing
-the following. For example, adjusting the pre-detected directories for CuDNN or BLAS can be done
-with such a step.
-
-On Linux
-```bash
-export CMAKE_PREFIX_PATH=${CONDA_PREFIX:-"$(dirname $(which conda))/../"}
-python setup.py build --cmake-only
-ccmake build  # or cmake-gui build
-```
-
-On macOS
-```bash
-export CMAKE_PREFIX_PATH=${CONDA_PREFIX:-"$(dirname $(which conda))/../"}
-MACOSX_DEPLOYMENT_TARGET=10.9 CC=clang CXX=clang++ python setup.py build --cmake-only
-ccmake build  # or cmake-gui build
-```
-
-### Docker Image
-
-#### Using pre-built images
-
-You can also pull a pre-built docker image from Docker Hub and run with docker v19.03+
-
-```bash
-docker run --gpus all --rm -ti --ipc=host pytorch/pytorch:latest
-```
-
-Please note that PyTorch uses shared memory to share data between processes, so if torch multiprocessing is used (e.g.
-for multithreaded data loaders) the default shared memory segment size that container runs with is not enough, and you
-should increase shared memory size either with `--ipc=host` or `--shm-size` command line options to `nvidia-docker run`.
-
-#### Building the image yourself
-
-**NOTE:** Must be built with a docker version > 18.06
-
-The `Dockerfile` is supplied to build images with CUDA 11.1 support and cuDNN v8.
-You can pass `PYTHON_VERSION=x.y` make variable to specify which Python version is to be used by Miniconda, or leave it
-unset to use the default.
-
-```bash
-make -f docker.Makefile
-# images are tagged as docker.io/${your_docker_username}/pytorch
-```
-
-You can also pass the `CMAKE_VARS="..."` environment variable to specify additional CMake variables to be passed to CMake during the build.
-See [setup.py](./setup.py) for the list of available variables.
-
-```bash
-make -f docker.Makefile
-```
-
-### Building the Documentation
-
-To build documentation in various formats, you will need [Sphinx](http://www.sphinx-doc.org) and the
-readthedocs theme.
-
-```bash
-cd docs/
-pip install -r requirements.txt
-```
-You can then build the documentation by running `make <format>` from the
-`docs/` folder. Run `make` to get a list of all available output formats.
-
-If you get a katex error run `npm install katex`.  If it persists, try
-`npm install -g katex`
-
-> Note: if you installed `nodejs` with a different package manager (e.g.,
-`conda`) then `npm` will probably install a version of `katex` that is not
-compatible with your version of `nodejs` and doc builds will fail.
-A combination of versions that is known to work is `node@6.13.1` and
-`katex@0.13.18`. To install the latter with `npm` you can run
-```npm install -g katex@0.13.18```
-
-### Previous Versions
-
-Installation instructions and binaries for previous PyTorch versions may be found
-on [our website](https://pytorch.org/previous-versions).
-
-
-## Getting Started
-
-Three-pointers to get you started:
-- [Tutorials: get you started with understanding and using PyTorch](https://pytorch.org/tutorials/)
-- [Examples: easy to understand PyTorch code across all domains](https://github.com/pytorch/examples)
-- [The API Reference](https://pytorch.org/docs/)
-- [Glossary](https://github.com/pytorch/pytorch/blob/main/GLOSSARY.md)
-
-## Resources
-
-* [PyTorch.org](https://pytorch.org/)
-* [PyTorch Tutorials](https://pytorch.org/tutorials/)
-* [PyTorch Examples](https://github.com/pytorch/examples)
-* [PyTorch Models](https://pytorch.org/hub/)
-* [Intro to Deep Learning with PyTorch from Udacity](https://www.udacity.com/course/deep-learning-pytorch--ud188)
-* [Intro to Machine Learning with PyTorch from Udacity](https://www.udacity.com/course/intro-to-machine-learning-nanodegree--nd229)
-* [Deep Neural Networks with PyTorch from Coursera](https://www.coursera.org/learn/deep-neural-networks-with-pytorch)
-* [PyTorch Twitter](https://twitter.com/PyTorch)
-* [PyTorch Blog](https://pytorch.org/blog/)
-* [PyTorch YouTube](https://www.youtube.com/channel/UCWXI5YeOsh03QvJ59PMaXFw)
-
-## Communication
-* Forums: Discuss implementations, research, etc. https://discuss.pytorch.org
-* GitHub Issues: Bug reports, feature requests, install issues, RFCs, thoughts, etc.
-* Slack: The [PyTorch Slack](https://pytorch.slack.com/) hosts a primary audience of moderate to experienced PyTorch users and developers for general chat, online discussions, collaboration, etc. If you are a beginner looking for help, the primary medium is [PyTorch Forums](https://discuss.pytorch.org). If you need a slack invite, please fill this form: https://goo.gl/forms/PP1AGvNHpSaJP8to1
-* Newsletter: No-noise, a one-way email newsletter with important announcements about PyTorch. You can sign-up here: https://eepurl.com/cbG0rv
-* Facebook Page: Important announcements about PyTorch. https://www.facebook.com/pytorch
-* For brand guidelines, please visit our website at [pytorch.org](https://pytorch.org/)
-
-## Releases and Contributing
-
-Typically, PyTorch has three minor releases a year. Please let us know if you encounter a bug by [filing an issue](https://github.com/pytorch/pytorch/issues).
-
-We appreciate all contributions. If you are planning to contribute back bug-fixes, please do so without any further discussion.
-
-If you plan to contribute new features, utility functions, or extensions to the core, please first open an issue and discuss the feature with us.
-Sending a PR without discussion might end up resulting in a rejected PR because we might be taking the core in a different direction than you might be aware of.
-
-To learn more about making a contribution to Pytorch, please see our [Contribution page](CONTRIBUTING.md). For more information about PyTorch releases, see [Release page](RELEASE.md).
-
-## The Team
-
-PyTorch is a community-driven project with several skillful engineers and researchers contributing to it.
-
-PyTorch is currently maintained by [Soumith Chintala](http://soumith.ch), [Gregory Chanan](https://github.com/gchanan), [Dmytro Dzhulgakov](https://github.com/dzhulgakov), [Edward Yang](https://github.com/ezyang), and [Nikita Shulga](https://github.com/malfet) with major contributions coming from hundreds of talented individuals in various forms and means.
-A non-exhaustive but growing list needs to mention: [Trevor Killeen](https://github.com/killeent), [Sasank Chilamkurthy](https://github.com/chsasank), [Sergey Zagoruyko](https://github.com/szagoruyko), [Adam Lerer](https://github.com/adamlerer), [Francisco Massa](https://github.com/fmassa), [Alykhan Tejani](https://github.com/alykhantejani), [Luca Antiga](https://github.com/lantiga), [Alban Desmaison](https://github.com/albanD), [Andreas Koepf](https://github.com/andreaskoepf), [James Bradbury](https://github.com/jamesb93), [Zeming Lin](https://github.com/ebetica), [Yuandong Tian](https://github.com/yuandong-tian), [Guillaume Lample](https://github.com/glample), [Marat Dukhan](https://github.com/Maratyszcza), [Natalia Gimelshein](https://github.com/ngimel), [Christian Sarofeen](https://github.com/csarofeen), [Martin Raison](https://github.com/martinraison), [Edward Yang](https://github.com/ezyang), [Zachary Devito](https://github.com/zdevito).
-
-Note: This project is unrelated to [hughperkins/pytorch](https://github.com/hughperkins/pytorch) with the same name. Hugh is a valuable contributor to the Torch community and has helped with many things Torch and PyTorch.
-
-## License
-
-PyTorch has a BSD-style license, as found in the [LICENSE](LICENSE) file.
+La ruota si presenta come CUDA («masquerading»): si usa `device="cuda"`, e per riconoscere
+la GPU si usa `torch.cuda.is_available()`, non `torch.version.hip`.
+
+## Limiti noti
+
+- **Solo gfx906**, provata su una sola scheda. Niente bf16 in hardware: usare fp16
+  (autocast).
+- Niente `torch.compile`/Triton, niente aotriton; la flash attention gfx906 è collegata a
+  `sdpa` solo su richiesta (`ruota_flash.attiva()`) e copre fp16 con head dim fino a 256.
+- `torch.distributed` esiste (Gloo) ma senza RCCL/NCCL; niente Kineto (profiler GPU
+  limitato a quanto attivato dalla patch 68), niente MKLDNN, FBGEMM, XNNPACK.
+- Lo stream nullo del driver Adrenalin non sa attendere un evento: aggirato con un ponte su
+  uno stream bloccante (la CPU attende ~0,1 ms).
+- torchvision 0.20 compilato a parte con operazioni proprie solo su CPU (deform_conv2d GPU
+  via `ruota_acceleratori`).
+- I tempi valgono a GPU libera; con altri processi sulla stessa scheda calano.
+- Gli script di build e molti banchi contengono percorsi assoluti della macchina di
+  costruzione (`C:\LaRuota_workspace`, `C:\rocm_5_7_expansion_pack`, `C:\TheRock_workspace`):
+  vedi «Compilare da sorgente». La wheel installata non ne dipende.
+
+## Licenza
+
+**BSD-3-Clause**, come PyTorch ([LICENSE](LICENSE), [NOTICE](NOTICE)). Le modifiche e i
+file della cartella `la-ruota/` sono © 2026 2 Solution e distribuiti alle stesse condizioni:
+vedi [la-ruota/NOTICE](la-ruota/NOTICE).
+
+---
+
+<a name="english"></a>
+# English
+
+**La Ruota** ("the wheel") is **PyTorch 2.5.1 built natively for ROCm on Windows** for the
+AMD **Radeon VII (gfx906)**, a card AMD no longer supports on Windows and for which no
+official wheels exist. No CUDA→HIP translation at runtime: kernels are compiled for gfx906
+and PyTorch calls HIP, rocBLAS, rocSOLVER and MIOpen directly — about **5× faster** than the
+ZLUDA route ([zluda-gfx906](https://github.com/2s-2solution/zluda-gfx906)). To our knowledge
+no working public native ROCm-on-Windows build for gfx906 existed when it was made
+(August 2026).
+
+Branch `la-ruota-gfx906` starts at tag **`v2.5.1`** (`a8d6afb`) and contains the source
+changes (marked `VEGA-PATCH <n>`, up to 84; patch 85, which aligns `torch/__init__.py` with the
+published wheel, has no marker), the hipified HIP sources as actually compiled
+(Windows hipify silently writes nothing because of a path-separator bug, and the build
+compiles the `.hip` files, so they are committed with their hand fixes), and the
+[`la-ruota/`](la-ruota/) folder with the guide (Italian), build runbook, scripts, regression
+benches and hand-written gfx906 kernels (flash attention, Gated DeltaNet, fused norms, LoRA,
+loss, GEMM routing, tiled transpose).
+
+**Measured (22 Oct 2026, single Radeon VII, idle GPU):** fp16 GEMM 10.96 TFLOPS; all MIOpen
+convolution tests pass, 5-step CNN within 1.2e-7 of CPU; RNN 13/13, multilayer LSTM in MIOpen
+4.93× faster than the native path; GPU op census 98/98; GPU linear algebra 20/20,
+cholesky/lstsq 63/63, eigh/svd 93/93 (computed with MKL on the CPU since patch 81); softmax 13/13; streams/events 9/9; TorchScript 2/2;
+MKL/LAPACK/numpy 2 21/21 (CPU matmul 317 GFLOPS); flash attention 1.94× faster with
+146 MB instead of 2,162 MB; LoRA fp16 on Qwen3.5-4B 182 → 562 tokens/s.
+
+**Runtime requirements:** Radeon VII (gfx906, the only card tested), Windows 10 22H2 64-bit,
+AMD Software 25.Q3 driver (`System32\amdhip64.dll`), Python 3.12 64-bit, VC++ 2015-2022 x64
+redistributable. ZLUDA, rocm-marconi, the HIP SDK and ROCm 7.1 are **not** needed: the wheel
+ships the ROCm 5.7 libraries, the fixed MIOpen, ROCm 7.1 hipRTC/COMgr and the shims in
+`torch\lib`. Shim sources: `hiprtc07013.dll` and `amd_cmgr3.dll` in miopen-gfx906 (`shim/`),
+`amdhip64_7.dll` in rocm-marconi (`runtime/src/shim_main.c`).
+
+**Where the `torch\lib` DLLs come from:** PyTorch from this repository; `MIOpen.dll`,
+`hiprtc07013.dll` and `amd_cmgr3.dll` from miopen-gfx906 (with ROCm 7.1's hipRTC and COMgr DLLs,
+unchanged); `amdhip64_7.dll` and hipBLASLt from rocm-marconi; rocBLAS, rocSOLVER, rocSPARSE,
+rocFFT and the hip* wrappers from the HIP SDK 5.7; `uv.dll` from libuv; `libiomp5md.dll` from the
+`intel-openmp` pip package. The HIP runtime is the driver's and is not included.
+
+**Quick install:** download the self-extracting package from the
+**[Releases](https://github.com/2s-2solution/la-ruota/releases)** page and check its published
+SHA256. Binary packages are not stored in git.
+
+**Build (not portable as is):** the build scripts and some CMake files of this branch hard-code
+the build machine's paths. Prerequisites: HIP SDK 5.7; rocm-marconi in
+`C:\rocm_5_7_expansion_pack`, with `include\hip\hip_version.h` bumped to 6.4 by hand (patch 28);
+a TheRock build for gfx906 in `C:\TheRock_workspace\TheRock\build_gfx906` (hipBLASLt 7.x and
+MIOpen headers); libuv built with `costruisci_libuv.cmd`; static MKL via
+`pip install --prefix C:\LaRuota_workspace\mkl_prefix mkl-static mkl-include intel-openmp`;
+numpy 2.2.6 headers via `pip install --target C:\LaRuota_workspace\numpy2_headers numpy==2.2.6`;
+VS Build Tools 2022, CMake 3.31, Ninja, Python 3.12. Then clone this branch to
+`C:\LaRuota_workspace\pytorch_src`, apply `la-ruota/patches/kineto-hip-platform-amd.patch`, copy
+`la-ruota/workspace` to `C:\LaRuota_workspace`, run `build_laruota_canonical.cmd build`, copy the
+runtime DLLs with `deploy_runtime_dlls.py` and check with `regressione_completa.py` (commands
+above). The runbook in `la-ruota/docs/` is historical.
+
+**Known limits:** gfx906 only, tested on one card; no bf16 hardware (use fp16); no
+`torch.compile`/Triton/aotriton; Gloo-only distributed, no Kineto/MKLDNN/FBGEMM/XNNPACK;
+the Adrenalin null stream cannot wait on events (worked around); scripts use absolute paths
+of the build machine.
+
+**License:** BSD-3-Clause, same as PyTorch. Changes © 2026 2 Solution, same terms; see
+[la-ruota/NOTICE](la-ruota/NOTICE).

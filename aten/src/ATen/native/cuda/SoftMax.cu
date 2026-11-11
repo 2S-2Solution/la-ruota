@@ -21,6 +21,7 @@
 #include <ATen/Functions.h>
 #include <ATen/NativeFunctions.h>
 #else
+#include <ATen/ops/_masked_softmax_backward_native.h>
 #include <ATen/ops/_masked_softmax_native.h>
 #include <ATen/ops/_log_softmax_native.h>
 #include <ATen/ops/_log_softmax_backward_data_native.h>
@@ -465,13 +466,13 @@ ilpReduce(index_t shift,
   if(shift > 0){
     data -= shift;
     size += shift;
-    if(threadIdx.x >= shift){
+    if(threadIdx.x >= shift && threadIdx.x < size){  // [VEGA-PATCH 80] riga piu' corta del blocco
       threadVal = r(threadVal, data[offset]);
     }
     size -= blockDim.x;
     data += blockDim.x;
   }
-  index_t last = size % (ILP * blockDim.x);
+  index_t last = size % (ILP * static_cast<index_t>(blockDim.x));  // [VEGA-PATCH 80b] con segno: size puo' essere < 0
 
   T v[ILP];
   LoadT* value = reinterpret_cast<LoadT*>(&v);
@@ -515,7 +516,7 @@ WriteFpropResultsVectorized(
     output -= shift;
     size += shift;
 
-    if (threadIdx.x >= shift) {
+    if (threadIdx.x >= shift && threadIdx.x < size) {  // [VEGA-PATCH 80]
       output[offset] = epilogue(input[offset]);
     }
     size -= blockDim.x;
@@ -523,7 +524,7 @@ WriteFpropResultsVectorized(
     output += blockDim.x;
   }
 
-  const int last = size % (ILP * blockDim.x);
+  const int last = size % (ILP * static_cast<int>(blockDim.x));  // [VEGA-PATCH 80b]
 
   scalar_t in_v[ILP];
   LoadT* in_value = reinterpret_cast<LoadT*>(&in_v);
@@ -570,7 +571,7 @@ WriteBpropResultsVectorized(
     gradOutput -= shift;
     size += shift;
 
-    if (threadIdx.x >= shift) {
+    if (threadIdx.x >= shift && threadIdx.x < size) {  // [VEGA-PATCH 80]
       gradInput[offset] = epilogue(gradOutput[offset], output[offset]);
     }
     size -= blockDim.x;
@@ -579,7 +580,7 @@ WriteBpropResultsVectorized(
     gradOutput += blockDim.x;
   }
 
-  const index_t last = size % (ILP * blockDim.x);
+  const index_t last = size % (ILP * static_cast<index_t>(blockDim.x));  // [VEGA-PATCH 80b]
 
   scalar_t dX[ILP];
   gradInputT *dX_v = reinterpret_cast<gradInputT*>(&dX);

@@ -12,6 +12,36 @@ on an NVIDIA GPU with compute capability >= 3.0.
 
 import builtins
 import ctypes
+import os as _os_vega
+
+# [LA RUOTA] Impostazioni di MIOpen per gfx906, lette prima della prima chiamata a MIOpen.
+#
+# I tre difetti di MIOpen che su gfx906 davano gradienti sbagliati senza errori (conv 3x3
+# con 3 canali d'ingresso, ConvAsmImplicitGemmV4R1DynamicWrw, conv 1x1 con stride al cambio
+# di lotto) sono corretti nei sorgenti di MIOpen (repository miopen-gfx906): qui non si
+# esclude nessun solver.
+#
+# [VEGA-PATCH 71] LSTM/GRU di MIOpen: niente soluzioni RNN a piu' stream. Con >= 32 passi
+# MIOpen distribuisce l'indietro su stream di servizio e poi fa aspettare lo stream NULLO:
+# il runtime HIP del driver rifiuta quell'attesa e i gradienti dei pesi escono a zero dal
+# secondo indietro in poi, senza errori. Con queste tre la soluzione e' a uno stream.
+_os_vega.environ.setdefault("MIOPEN_RNNBWDMS_EXP", "0")
+_os_vega.environ.setdefault("MIOPEN_RNNBWMS_EXP", "0")
+_os_vega.environ.setdefault("MIOPEN_RNNFWD_EXP", "0")
+
+# [VEGA-PATCH 74 e 79] Cache dei kernel e database utente di MIOpen propri della ruota.
+# La chiave dei kernel in cache e' nome + opzioni + versione di MIOpen, non il sorgente:
+# in una cache condivisa con un'altra MIOpen della stessa versione (per esempio quella usata
+# da ZLUDA) un kernel corretto potrebbe essere sostituito da uno vecchio. Le due variabili,
+# se impostate, vincono; il vecchio percorso predefinito %LOCALAPPDATA%\miopen\db no.
+_ruota_dati = _os_vega.path.join(
+    _os_vega.environ.get("LOCALAPPDATA") or _os_vega.path.expanduser("~"), "2S", "la-ruota", "miopen")
+_os_vega.environ.setdefault("MIOPEN_CUSTOM_CACHE_DIR", _os_vega.path.join(_ruota_dati, "cache"))
+_os_vega.environ.setdefault("MIOPEN_USER_DB_PATH", _os_vega.path.join(_ruota_dati, "db"))
+if _os_vega.path.normcase(_os_vega.path.normpath(_os_vega.environ["MIOPEN_USER_DB_PATH"])) == \
+        _os_vega.path.normcase(_os_vega.path.join(_os_vega.environ.get("LOCALAPPDATA", "?"), "miopen", "db")):
+    _os_vega.environ["MIOPEN_USER_DB_PATH"] = _os_vega.path.join(_ruota_dati, "db")
+del _ruota_dati
 import glob
 import importlib
 import inspect

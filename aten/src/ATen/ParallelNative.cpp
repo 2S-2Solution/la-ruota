@@ -112,12 +112,24 @@ struct ParallelRegionGuard {
   ParallelRegionGuard(int task_id) {
     internal::set_thread_num(task_id);
     _set_in_parallel_region(true);
+#if AT_MKL_ENABLED()
+    // [VEGA-PATCH 66] dentro una regione parallela MKL usa un solo thread, ma solo
+    // per questo thread: fuori dalle regioni MKL tiene tutti i core
+    mkl_prev_threads_ = mkl_set_num_threads_local(1);
+#endif
   }
 
   ~ParallelRegionGuard() {
+#if AT_MKL_ENABLED()
+    mkl_set_num_threads_local(mkl_prev_threads_);
+#endif
     _set_in_parallel_region(false);
     _unset_thread_num();
   }
+
+#if AT_MKL_ENABLED()
+  int mkl_prev_threads_ = 0;
+#endif
 };
 
 } // namespace
@@ -199,9 +211,8 @@ void init_num_threads() {
   omp_set_num_threads(1);
 #endif
 
-#if AT_MKL_ENABLED()
-  mkl_set_num_threads(1);
-#endif
+  // [VEGA-PATCH 66] qui c'era mkl_set_num_threads(1): globale, bloccava ogni
+  // chiamata MKL a un core. Il limite a 1 ora vale solo dentro ParallelRegionGuard.
 
 #ifdef C10_MOBILE
   caffe2::pthreadpool();
@@ -211,6 +222,9 @@ void init_num_threads() {
 void set_num_threads(int nthreads) {
 #ifndef C10_MOBILE
   TORCH_CHECK(nthreads > 0, "Expected positive number of threads");
+#if AT_MKL_ENABLED()
+  mkl_set_num_threads(nthreads);  // [VEGA-PATCH 66] come nel ramo OpenMP
+#endif
   int no_value = NOT_SET;
   if (!num_intraop_threads.compare_exchange_strong(no_value, nthreads)) {
     // num_intraop_threads either stores a positive integer or CONSUMED,

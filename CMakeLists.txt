@@ -25,6 +25,19 @@ endif()
 # ---[ Project and semantic versioning.
 project(Torch CXX C)
 
+# [VEGA-PATCH 46e T13:35 5 lug - REGOLA 4-bis: famiglia BLAS coerente TheRock 7.14]
+# Forza dist/rocm/include come PRIMO -I per OGNI target: <hipblas/hipblas.h> risolve sempre
+# alla versione 7.x (che usa hipblas-common) invece della 5.7 (modello vecchio inline).
+# Il CXXFLAGS globale non basta: gli INCLUDES dei target ROCm (5.7/include via hip::host)
+# precedono. include_directories(BEFORE) mette dist in testa a tutti i target.
+if(WIN32 AND USE_ROCM)
+  # Marconi/include (rocprim/hipcub/thrust 7.1 + hip) e dist/rocm/include (BLAS 7.14) PRIMA di
+  # ROCm 5.7/include: forza le versioni coerenti degli header su ogni target.
+  include_directories(BEFORE
+    "C:/rocm_5_7_expansion_pack/include"
+    "C:/TheRock_workspace/TheRock/build_gfx906/dist/rocm/include")
+endif()
+
 if(${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
   set(LINUX TRUE)
 else()
@@ -245,7 +258,13 @@ option(USE_XPU "Use XPU" ON)
 cmake_dependent_option(
   BUILD_LAZY_CUDA_LINALG "Build cuda linalg ops as separate library" ON
   "USE_CUDA AND LINUX AND BUILD_PYTHON" OFF)
-cmake_dependent_option(USE_ROCM "Use ROCm" ON "LINUX" OFF)
+# [VEGA-PATCH 2 v3 T19:05 20 giu] option() NON sovrascrive cache → set(FORCE) override.
+# Build #22 ha salvato USE_ROCM=OFF in cache → wheel CPU-only. set(...CACHE BOOL FORCE) garantisce ON.
+if(LINUX OR WIN32)
+  set(USE_ROCM ON CACHE BOOL "Use ROCm" FORCE)
+else()
+  set(USE_ROCM OFF CACHE BOOL "Use ROCm" FORCE)
+endif()
 option(CAFFE2_STATIC_LINK_CUDA "Statically link CUDA libraries" OFF)
 cmake_dependent_option(USE_CUDNN "Use cuDNN" ON "USE_CUDA" OFF)
 cmake_dependent_option(USE_STATIC_CUDNN "Use cuDNN static libraries" OFF
@@ -887,6 +906,15 @@ cmake_dependent_option(
 # Cannot be put into Dependencies.cmake due circular dependency:
 # USE_FLASH_ATTENTION -> USE_ROCM -> Dependencies.cmake -> aotriton.cmake
 #
+# [VEGA-PATCH 1] Disable aotriton for gfx906/gfx908 (Vega 20 / MI100)
+# Reasoning: aotriton issue #1925 — non supportato per pre-CDNA / pre-MI200.
+# Override aotriton-dependent flags ON-by-default a OFF SOLO se gfx906/gfx908.
+if(USE_ROCM AND PYTORCH_ROCM_ARCH MATCHES "gfx906|gfx908")
+  set(USE_FLASH_ATTENTION OFF CACHE BOOL "" FORCE)
+  set(USE_MEM_EFF_ATTENTION OFF CACHE BOOL "" FORCE)
+  message(STATUS "VEGA-PATCH: Disabling FlashAttention + MemEffAttention for ${PYTORCH_ROCM_ARCH} (aotriton unsupported)")
+endif()
+
 if(USE_ROCM)
   if(USE_FLASH_ATTENTION OR USE_MEM_EFF_ATTENTION)
     include(cmake/External/aotriton.cmake)

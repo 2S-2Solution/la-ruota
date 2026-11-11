@@ -658,19 +658,30 @@ def libtorch_sources(gencode_pattern = ":generate-code[{}]"):
         libtorch_generated_sources(gencode_pattern) + libtorch_core_sources + libtorch_distributed_sources + libtorch_extra_sources
     )
 
+# VEGA-PATCH 44 T05:00 23 giu: esclusi 4 file CUDA-specific non hipify-able da torch_hip target.
+# CUDAPluggableAllocator/shim_cuda/fused_kernel/profiler/stubs/cuda hanno dipendenze CUDA hardcoded
+# (CUDAError redefinition, streamType abstract class) — non risolvibili con compat header.
+# Accessori non critici per training core PyTorch ROCm Manzoni.
 libtorch_cuda_core_sources = [
     "torch/csrc/CudaIPCTypes.cpp",
     "torch/csrc/cuda/comm.cpp",
     "torch/csrc/cuda/memory_snapshot.cpp",
+    # [VEGA-PATCH 48 1 ago] RIABILITATO: l'esclusione di VEGA-PATCH 44 (23 giu) nasceva
+    # dal fatto che torch/csrc non era mai stato hipificato (bug Windows di hipify).
+    # Ora lo e', e torch_python richiede questi simboli al link.
     "torch/csrc/cuda/CUDAPluggableAllocator.cpp",
     "torch/csrc/inductor/aoti_runner/model_container_runner_cuda.cpp",
-    "torch/csrc/inductor/aoti_torch/shim_cuda.cpp",
+    "torch/csrc/inductor/aoti_torch/shim_cuda.cpp",  # [VEGA-PATCH 68] rientrato
+    # [VEGA-PATCH 48 1 ago] RIABILITATO: definisce codegenOutputQuery, richiesto da
+    # cuda_codegen.cpp. Come gli altri, l'esclusione di giugno era conseguenza di
+    # torch/csrc non hipificato.
     "torch/csrc/jit/codegen/fuser/cuda/fused_kernel.cpp",
-    "torch/csrc/profiler/stubs/cuda.cpp",
+    "torch/csrc/profiler/stubs/cuda.cpp",  # [VEGA-PATCH 68] rientrato, senza roctx
     "torch/csrc/autograd/functions/comm.cpp",
     "torch/csrc/jit/passes/frozen_conv_add_relu_fusion_cuda.cpp",
+    # [VEGA-PATCH 48 1 ago] RIABILITATO come sopra: torch_python linka CudaCodeGen.
     "torch/csrc/jit/tensorexpr/cuda_codegen.cpp",
-    "torch/csrc/jit/runtime/register_cuda_ops.cpp",
+    "torch/csrc/jit/runtime/register_cuda_ops.cpp",  # [VEGA-PATCH 68] rientrato
 ]
 
 # These files are the only ones that are supported on Windows.

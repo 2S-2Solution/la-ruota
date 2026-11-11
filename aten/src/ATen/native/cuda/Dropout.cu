@@ -18,9 +18,11 @@
 #include <ATen/Functions.h>
 #include <ATen/NativeFunctions.h>
 #else
+#include <ATen/ops/_fused_dropout_native.h>
 #include <ATen/ops/_masked_scale_native.h>
 #include <ATen/ops/empty_like.h>
 #include <ATen/ops/native_dropout_backward_native.h>
+#include <ATen/ops/native_dropout_native.h>
 #include <ATen/ops/ones_like.h>
 #include <ATen/ops/zeros_like.h>
 #endif

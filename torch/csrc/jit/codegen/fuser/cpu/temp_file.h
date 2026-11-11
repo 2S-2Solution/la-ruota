@@ -28,7 +28,7 @@ namespace fuser {
 namespace cpu {
 
 #ifdef _MSC_VER
-int wmkstemps(wchar_t* tmpl, int suffix_len) {
+static int wmkstemps(wchar_t* tmpl, int suffix_len) {
   int len;
   wchar_t* name;
   int fd = -1;

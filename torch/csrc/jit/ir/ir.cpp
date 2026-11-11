@@ -1177,12 +1177,13 @@ bool Node::hasSideEffects() const {
     case prim::rpc_sync: // It represents RPC message sent.
     case prim::rpc_remote: // It represents RPC message sent.
     case aten::wait: // It can represent RPC message received.
-#if !defined(USE_ROCM)
-    case cuda::set_stream:
-    case cuda::_set_device:
-    case cuda::_current_device:
-    case cuda::synchronize:
-#endif
+    // [VEGA-PATCH 69] upstream le escludeva su ROCm: senza, il codice morto di
+    // TorchScript elimina synchronize e set_stream. Nome completo perche' su ROCm un
+    // namespace torch::jit::cuda nasconde quello dei simboli
+    case c10::cuda::set_stream:
+    case c10::cuda::_set_device:
+    case c10::cuda::_current_device:
+    case c10::cuda::synchronize:
     case prim::Enter:
     case prim::Exit:
       return true;

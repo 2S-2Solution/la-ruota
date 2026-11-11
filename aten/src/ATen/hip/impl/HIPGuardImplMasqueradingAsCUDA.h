@@ -1,5 +1,10 @@
 #pragma once
-
+// [VEGA-PATCH 48 1 ago] Guardia classica OLTRE a #pragma once: la junction
+// build/aten/src/ATen/hip -> aten/src/ATen/hip espone questo file con due percorsi
+// assoluti diversi, e #pragma once non deduplica (redefinition dei tipi guard).
+#ifndef ATEN_HIP_IMPL_HIPGUARDIMPL_MASQ_H_
+#define ATEN_HIP_IMPL_HIPGUARDIMPL_MASQ_H_
+#include <c10/hip/VegaStreamWait.h>  // [VEGA-PATCH 69]
 #include <ATen/hip/HIPConfig.h>
 
 // The includes of HIPGuard.h
@@ -179,7 +184,7 @@ struct HIPGuardImplMasqueradingAsCUDA final : public c10::impl::DeviceGuardImplI
     HIPStreamMasqueradingAsCUDA hip_stream{stream};
     const auto orig_device = getDevice();
     setDevice(stream.device());
-    C10_HIP_CHECK(hipStreamWaitEvent(
+    C10_HIP_CHECK(c10::hip::vega_stream_wait_event(  // [VEGA-PATCH 69] stream nullo
       hip_stream,
       hip_event,
       /*flags (must be zero)=*/ 0));
@@ -372,3 +377,5 @@ private:
 };
 
 }} // namespace c10::hip
+
+#endif  // ATEN_HIP_IMPL_HIPGUARDIMPL_MASQ_H_

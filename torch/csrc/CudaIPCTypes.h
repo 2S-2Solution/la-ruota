@@ -1,15 +1,16 @@
-#pragma once
-#ifdef USE_CUDA
+﻿#pragma once
+// VEGA-PATCH 39 T02:22: estendi guard USE_ROCM a USE_ROCM (HIP build compatibility)
+#if defined(USE_ROCM) || defined(USE_ROCM)
 #include <c10/core/Allocator.h>
-#include <c10/cuda/CUDACachingAllocator.h>
-#include <c10/cuda/CUDAException.h>
+#include <ATen/hip/impl/HIPCachingAllocatorMasqueradingAsCUDA.h>
+#include <c10/hip/HIPException.h>
 #include <c10/util/Logging.h>
-#include <cuda_runtime_api.h>
+#include <hip/hip_runtime_api.h>
 #include <torch/csrc/Export.h>
 #include <cstddef>
 namespace torch {
 
-TORCH_CUDA_CU_API bool CudaIPCCollect();
+TORCH_HIP_CU_API bool CudaIPCCollect();
 
 struct CudaIPCReceivedData final {
   CudaIPCReceivedData() = default;
@@ -23,7 +24,7 @@ struct CudaIPCSentData final {
   uint64_t offset_;
   uint64_t* counter_ptr_; // Reference counter shared memory block
   at::DataPtr original_ptr_; // Original mem allocation
-  cudaEvent_t event_; // Sync cuEventDestroy
+  hipEvent_t event_; // Sync hipEventDestroy
   bool event_sync_required_;
   at::Device device_;
 
@@ -46,7 +47,7 @@ struct CudaIPCSentData final {
   }
 };
 
-TORCH_CUDA_CU_API at::DataPtr GetNewRefCountedSentData(
+TORCH_HIP_CU_API at::DataPtr GetNewRefCountedSentData(
     void* data,
     at::Device device);
 

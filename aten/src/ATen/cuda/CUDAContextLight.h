@@ -3,13 +3,36 @@
 
 #include <cstdint>
 
+// VEGA-PATCH 32 T22:01: redirect cuda_runtime headers a hip equivalenti su USE_ROCM
+// VEGA-PATCH 32c T1530 (build #62 worker): aggiunge cudaDeviceProp, cublasLtHandle_t,
+// cusolverDnHandle_t macro mapping; allinea a HIPIFY canonical pattern
+#ifdef USE_ROCM
+#include <hip/hip_runtime_api.h>
+#include <hipsparse/hipsparse.h>
+#include <hipblas/hipblas.h>
+#include <hipblaslt/hipblaslt.h>
+#include <hipsolver/hipsolver.h>
+#define cudaStream_t hipStream_t
+#define cudaEvent_t hipEvent_t
+#define cudaError_t hipError_t
+#define cudaSuccess hipSuccess
+#define cudaDeviceProp hipDeviceProp_t
+#define cusparseHandle_t hipsparseHandle_t
+#define cublasHandle_t hipblasHandle_t
+#define cublasLtHandle_t hipblasLtHandle_t
+#define cusolverDnHandle_t hipsolverHandle_t
+#else
 #include <cuda_runtime_api.h>
 #include <cusparse.h>
 #include <cublas_v2.h>
+#endif
 
 // cublasLT was introduced in CUDA 10.1 but we enable only for 11.1 that also
 // added bf16 support
+// VEGA-PATCH 32b T22:25: skip cublasLt in ROCm mode (uses hipblaslt instead)
+#ifndef USE_ROCM
 #include <cublasLt.h>
+#endif
 
 #ifdef CUDART_VERSION
 #include <cusolverDn.h>

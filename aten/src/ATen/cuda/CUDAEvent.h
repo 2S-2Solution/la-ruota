@@ -8,7 +8,11 @@
 #include <ATen/cuda/Exceptions.h>
 #include <c10/util/Exception.h>
 
+#ifdef USE_ROCM
+#include <hip/hip_runtime_api.h>
+#else
 #include <cuda_runtime_api.h>
+#endif
 
 #include <cstdint>
 #include <utility>

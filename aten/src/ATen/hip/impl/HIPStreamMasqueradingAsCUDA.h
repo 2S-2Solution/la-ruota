@@ -1,5 +1,9 @@
 #pragma once
-
+// [VEGA-PATCH 48 1 ago] Guardia classica OLTRE a #pragma once: la junction
+// build/aten/src/ATen/hip -> aten/src/ATen/hip espone questo file con due percorsi
+// assoluti diversi, e #pragma once non deduplica (redefinition dei tipi guard).
+#ifndef ATEN_HIP_IMPL_HIPSTREAM_MASQ_H_
+#define ATEN_HIP_IMPL_HIPSTREAM_MASQ_H_
 #include <c10/hip/HIPStream.h>
 
 // Use of c10::hip namespace here makes hipification easier, because
@@ -91,18 +95,21 @@ private:
   HIPStream stream_;
 };
 
-HIPStreamMasqueradingAsCUDA
-inline getStreamFromPoolMasqueradingAsCUDA(const bool isHighPriority = false, DeviceIndex device = -1) {
+// [VEGA-FIX T15:15 20 giu] clang-cl 21 strict richiede:
+//  1. return type sulla stessa riga di `inline`
+//  2. namespace prefix esplicito c10::hip:: per getStreamFromPool/External
+//     (ADL non risolve perché siamo già dentro namespace c10::hip e i nomi
+//      sono dichiarati in c10/hip/HIPStream.h ma in C10_HIP_API export macro
+//      che clang strict richiede esplicito).
+inline HIPStreamMasqueradingAsCUDA getStreamFromPoolMasqueradingAsCUDA(const bool isHighPriority = false, DeviceIndex device = -1) {
   return HIPStreamMasqueradingAsCUDA(getStreamFromPool(isHighPriority, device));
 }
 
-HIPStreamMasqueradingAsCUDA
-inline getStreamFromPoolMasqueradingAsCUDA(const int priority, DeviceIndex device = -1) {
+inline HIPStreamMasqueradingAsCUDA getStreamFromPoolMasqueradingAsCUDA(const int priority, DeviceIndex device = -1) {
   return HIPStreamMasqueradingAsCUDA(getStreamFromPool(priority, device));
 }
 
-HIPStreamMasqueradingAsCUDA
-inline getStreamFromExternalMasqueradingAsCUDA(hipStream_t ext_stream, DeviceIndex device) {
+inline HIPStreamMasqueradingAsCUDA getStreamFromExternalMasqueradingAsCUDA(hipStream_t ext_stream, DeviceIndex device) {
   return HIPStreamMasqueradingAsCUDA(getStreamFromExternal(ext_stream, device));
 }
 
@@ -133,3 +140,5 @@ namespace std {
     }
   };
 } // namespace std
+
+#endif  // ATEN_HIP_IMPL_HIPSTREAM_MASQ_H_

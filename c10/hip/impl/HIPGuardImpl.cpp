@@ -1,0 +1,7 @@
+#include <c10/hip/impl/HIPGuardImpl.h>
+
+namespace c10::hip::impl {
+
+C10_REGISTER_GUARD_IMPL(HIP, HIPGuardImpl);
+
+} // namespace c10::hip::impl

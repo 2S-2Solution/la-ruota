@@ -7,7 +7,27 @@
 #include <c10/core/thread_pool.h>
 #include <c10/cuda/CUDAAllocatorConfig.h>
 
+#if defined(USE_ROCM) || defined(__HIP_PLATFORM_AMD__)
+#include <hip/hip_runtime_api.h>
+// CUDA → HIP symbol aliases for HIPify pass (Vega LA RUOTA gfx906 5.7 native)
+#define cudaError_t              hipError_t
+#define cudaSuccess              hipSuccess
+#define cudaErrorNotReady        hipErrorNotReady
+#define cudaStream_t             hipStream_t
+#define cudaEvent_t              hipEvent_t
+#define cudaEventQuery           hipEventQuery
+#define cudaGetLastError         hipGetLastError
+#define cudaEventDisableTiming   hipEventDisableTiming
+#define cudaHostAlloc            hipHostMalloc
+#define cudaHostAllocDefault     hipHostMallocDefault
+#define cudaHostRegister         hipHostRegister
+#define cudaHostRegisterDefault  hipHostRegisterDefault
+#define cudaHostUnregister       hipHostUnregister
+#define cudaFreeHost             hipHostFree
+#define cudaHostGetDevicePointer hipHostGetDevicePointer
+#else
 #include <cuda_runtime_api.h>
+#endif
 #include <future>
 
 namespace at::cuda {

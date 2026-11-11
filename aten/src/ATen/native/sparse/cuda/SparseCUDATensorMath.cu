@@ -22,6 +22,7 @@
 #include <ATen/NativeFunctions.h>
 #else
 #include <ATen/ops/_sparse_coo_tensor_with_dims_and_tensors.h>
+#include <ATen/ops/_sparse_sum_backward_native.h>
 #include <ATen/ops/_sparse_sum_native.h>
 #include <ATen/ops/add_native.h>
 #include <ATen/ops/addmm_native.h>
@@ -32,6 +33,7 @@
 #include <ATen/ops/empty_like.h>
 #include <ATen/ops/hspmm_native.h>
 #include <ATen/ops/mul.h>
+#include <ATen/ops/mul_native.h>
 #include <ATen/ops/result_type.h>
 #include <ATen/ops/scalar_tensor.h>
 #include <ATen/ops/zeros_like.h>

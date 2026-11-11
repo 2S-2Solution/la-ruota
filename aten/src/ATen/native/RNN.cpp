@@ -69,11 +69,26 @@ namespace at::native {
 namespace {
 
 // Check if pytorch is compiled with MIOpen.
-bool use_miopen(const at::Tensor& input, const double dropout_state) {
+bool use_miopen(const at::Tensor& input, const double dropout_state, int64_t num_layers) {
     bool is_miopen_acceptable = ((input.scalar_type() == at::kFloat)|| (input.scalar_type() == at::kHalf)) &&
                                 (detail::getCUDAHooks().compiledWithMIOpen()) &&
                                 (input.is_cuda()) &&
                                 (at::globalContext().userEnabledCuDNN());
+
+    // [VEGA-PATCH 59 - 2 ago 2026] Difetto di MIOpen su gfx906: con PIU' DI UNO strato
+    // il risultato e' SBAGLIATO, senza errori ne' avvisi. Misurato contro CPU:
+    //   1 strato,  h=256, seq=64, lotto=32 -> relativo 6e-07   (corretto)
+    //   2 strati,  h=128                   -> relativo 3e-07   (corretto)
+    //   2 strati,  h>=160 oppure seq>=32 oppure lotto>=4 -> relativo ~1  (SBAGLIATO)
+    // Vale per LSTM, GRU e RNN semplice: la soglia dipende dalla dimensione, quindi
+    // una guardia basata sulle dimensioni sarebbe fragile. Qui si rinuncia a MIOpen
+    // per il multistrato e si usa il percorso nativo, corretto e piu' lento di 1,58x.
+    // Ricontrollare se MIOpen viene aggiornato: la guardia si toglie con una riga.
+    // [VEGA-PATCH 73 - 20 ott 2026] GUARDIA TOLTA. La causa era il percorso a piu' stream
+    // di MIOpen, che aspettava lo stream nullo: lo spengono la VEGA-PATCH 71 (variabili
+    // MIOPEN_RNN*_EXP=0) e lo shim amdhip64_7.dll di rocm-marconi (ponte). Con quelle le
+    // RNN a piu' strati in MIOpen sono giuste anche alle soglie qui sopra.
+    // if (num_layers > 1) return false;
     // MIOpen functions returns miopenStatusBadParm on empty
     // tensors. Maybe some functions actually support empty tensors, but
     // native kernels shouldn't be much slower because the output is also
@@ -1219,7 +1234,7 @@ std::tuple<Tensor, Tensor, Tensor, Tensor, Tensor> _thnn_fused_lstm_cell_backwar
           batch_first);                                                     \
       return std::make_tuple(std::move(output), std::move(hy));             \
     }                                                                       \
-    if (use_miopen(_input, dropout_p)) {                                    \
+    if (use_miopen(_input, dropout_p, num_layers)) {                                    \
       Tensor output, hy;                                                    \
       NAME##_miopen_stub(                                                   \
           _input.device().type(),                                           \
@@ -1281,7 +1296,7 @@ std::tuple<Tensor, Tensor, Tensor, Tensor, Tensor> _thnn_fused_lstm_cell_backwar
           bidirectional);                                                   \
       return std::make_tuple(std::move(output), std::move(hy));             \
     }                                                                       \
-    if (use_miopen(data, dropout_p)) {                                      \
+    if (use_miopen(data, dropout_p, num_layers)) {                                      \
       Tensor output, hy;                                                    \
       NAME##_packed_miopen_stub(                                            \
           data.device().type(),                                             \
@@ -1448,7 +1463,7 @@ std::tuple<Tensor, Tensor, Tensor> lstm(
 #endif
   // if cells are of different size, that means projections are used
   bool has_projections = (hx[0].sym_size(2) != hx[1].sym_size(2));
-  if (use_miopen(_input, dropout_p)) {
+  if (use_miopen(_input, dropout_p, num_layers)) {
     if (!has_projections) {
       Tensor output, hy, cy;
       lstm_miopen_stub(_input.device().type(), output, hy, cy, _input, hx, _params, has_biases,
@@ -1501,7 +1516,7 @@ std::tuple<Tensor, Tensor, Tensor> lstm(
   }
   // if cells are of different size, that means projections are used
   bool has_projections = (hx[0].size(2) != hx[1].size(2));
-  if (use_miopen(data, dropout_p)) {
+  if (use_miopen(data, dropout_p, num_layers)) {
     if (!has_projections) {
       Tensor output, hy, cy;
       lstm_packed_miopen_stub(data.device().type(), output, hy, cy, data, batch_sizes, hx,

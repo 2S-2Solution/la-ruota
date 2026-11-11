@@ -1,0 +1,20 @@
+La Ruota — PyTorch ROCm native build for AMD Radeon VII (gfx906) on Windows
+
+PyTorch
+  Copyright (c) 2016- Facebook, Inc (Adam Paszke), Meta Platforms, Inc. and affiliates,
+  and the PyTorch contributors (see ../LICENSE and ../NOTICE for the full list).
+  https://github.com/pytorch/pytorch
+  Licensed under the BSD 3-Clause License (../LICENSE).
+
+Modifications on branch la-ruota-gfx906 (on top of tag v2.5.1,
+commit a8d6afb511a69687bbb2b7e88a3cf67917e1697e), the hipified sources with their
+hand fixes, and the contents of this la-ruota/ folder
+  Copyright (c) 2026 2 Solution (https://www.2solution.it)
+  Distributed under the same BSD 3-Clause License as PyTorch.
+
+Changes in PyTorch sources are marked with "VEGA-PATCH <n>" comments.
+The hipified files were generated with PyTorch's own hipify tool and are derived from
+PyTorch sources (BSD 3-Clause).
+This software uses AMD ROCm/HIP, rocBLAS, rocSOLVER and MIOpen (MIT licensed,
+Copyright Advanced Micro Devices, Inc.) and Intel oneMKL (Intel Simplified Software
+License); none of them is included in this repository.

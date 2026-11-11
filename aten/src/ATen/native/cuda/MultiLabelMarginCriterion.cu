@@ -12,6 +12,8 @@
 #include <ATen/NativeFunctions.h>
 #else
 #include <ATen/ops/empty.h>
+#include <ATen/ops/multilabel_margin_loss_backward_native.h>
+#include <ATen/ops/multilabel_margin_loss_forward_native.h>
 #include <ATen/ops/zeros_like.h>
 #include <ATen/ops/sum_cuda_dispatch.h>
 #include <ATen/ops/multilabel_margin_loss.h>

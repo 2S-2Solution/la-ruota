@@ -6,6 +6,12 @@
 #include <ATen/native/cuda/Loops.cuh>
 #include <c10/core/Scalar.h>
 
+#ifndef AT_PER_OPERATOR_HEADERS
+#include <ATen/NativeFunctions.h>
+#else
+#include <ATen/ops/_assert_async_native.h>
+#endif
+
 
 namespace at::native {
 

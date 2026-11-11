@@ -2,6 +2,12 @@
 #include <ATen/native/sparse/ValidateCompressedIndicesCommon.h>
 #include <ATen/native/cuda/Loops.cuh>
 
+#ifndef AT_PER_OPERATOR_HEADERS
+#include <ATen/NativeFunctions.h>
+#else
+#include <ATen/ops/_validate_compressed_sparse_indices_native.h>
+#endif
+
 namespace at::native {
 
 namespace {

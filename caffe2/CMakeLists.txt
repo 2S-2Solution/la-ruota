@@ -1437,6 +1437,8 @@ if(USE_CUDA)
   target_compile_definitions(torch_cuda PRIVATE TORCH_CUDA_BUILD_MAIN_LIB)
 elseif(USE_ROCM)
   target_compile_definitions(torch_hip PRIVATE TORCH_HIP_BUILD_MAIN_LIB)
+  # VEGA-PATCH 35 T00:21: force-include compat header per torch/csrc/cuda/*.cpp non hipify-d
+  target_compile_options(torch_hip PRIVATE "/FI${CMAKE_SOURCE_DIR}/c10/cuda/_cuda_to_hip_compat.h")
 endif()
 
 if(USE_XPU)

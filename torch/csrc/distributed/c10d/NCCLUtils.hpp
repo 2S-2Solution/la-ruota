@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #ifdef USE_C10D_NCCL
 
@@ -10,9 +10,9 @@
 #include <thread>
 
 #include <ATen/ATen.h>
-#include <ATen/cuda/CUDAEvent.h>
+#include <ATen/hip\HIPEvent.h>
 #include <c10/util/Exception.h>
-#include <nccl.h>
+#include <rccl/rccl.h>
 #include <torch/csrc/distributed/c10d/TraceUtils.h>
 #include <optional>
 
@@ -561,8 +561,8 @@ struct ncclRedOpRAII {
 
 /* Helper used by work::getDuration() and nccl flight recorder */
 float getDurationFromEvent(
-    at::cuda::CUDAEvent& ncclStartEvent,
-    at::cuda::CUDAEvent& ncclEndEvent);
+    at::hip::HIPEvent& ncclStartEvent,
+    at::hip::HIPEvent& ncclEndEvent);
 
 struct NCCLTraceBuffer {
   static NCCLTraceBuffer* get() {
@@ -576,7 +576,7 @@ struct NCCLTraceBuffer {
     capture_cpp_stack_ = getCvarBool({"TORCH_NCCL_TRACE_CPP_STACK"}, false);
     enabled_ = max_entries_ > 0;
   }
-  using Event = at::cuda::CUDAEvent;
+  using Event = at::hip::HIPEvent;
   struct Entry {
     size_t id_; // incremented id in the trace buffer
                 // used to figure out where in the circular entries

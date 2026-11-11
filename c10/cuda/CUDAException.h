@@ -6,7 +6,12 @@
 #include <c10/macros/Macros.h>
 #include <c10/util/Exception.h>
 #include <c10/util/irange.h>
+// VEGA-PATCH 33 T22:25: redirect cuda.h a hip.h su USE_ROCM
+#ifdef USE_ROCM
+#include <hip/hip_runtime.h>
+#else
 #include <cuda.h>
+#endif
 
 // Note [CHECK macro]
 // ~~~~~~~~~~~~~~~~~~

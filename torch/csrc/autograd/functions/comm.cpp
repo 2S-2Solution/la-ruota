@@ -1,4 +1,4 @@
-#include <torch/csrc/autograd/functions/comm.h>
+﻿#include <torch/csrc/autograd/functions/comm.h>
 
 #include <ATen/core/functional.h>
 #include <torch/csrc/autograd/function.h>
@@ -7,7 +7,8 @@
 #include <torch/csrc/cuda/comm.h>
 
 #include <ATen/ATen.h>
-#include <ATen/cuda/CUDAContext.h>
+#include <ATen/hip\HIPContext.h>
+#include <ATen/hip/impl/HIPStreamMasqueradingAsCUDA.h>
 
 #include <memory>
 #include <vector>
@@ -17,7 +18,7 @@ Scatter::Scatter(
     std::vector<at::Device> devices,
     std::optional<std::vector<int64_t>> chunk_sizes,
     int64_t dim,
-    std::optional<std::vector<std::optional<at::cuda::CUDAStream>>> streams,
+    std::optional<std::vector<std::optional<c10::hip::HIPStreamMasqueradingAsCUDA>>> streams,
     bool unsqueeze_scalars)
     : devices_(std::move(devices)),
       chunk_sizes_(std::move(chunk_sizes)),

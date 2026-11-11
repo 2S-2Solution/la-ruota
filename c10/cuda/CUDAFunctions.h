@@ -11,7 +11,12 @@
 #include <c10/core/impl/GPUTrace.h>
 #include <c10/cuda/CUDAException.h>
 #include <c10/cuda/CUDAMacros.h>
+// VEGA-PATCH 34 T23:53: redirect cuda_runtime_api a hip su USE_ROCM
+#ifdef USE_ROCM
+#include <hip/hip_runtime_api.h>
+#else
 #include <cuda_runtime_api.h>
+#endif
 namespace c10::cuda {
 
 // NB: In the past, we were inconsistent about whether or not this reported

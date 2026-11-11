@@ -884,6 +884,19 @@ if(BUILD_PYTHON)
         caffe2_update_option(USE_NUMPY OFF)
       else()
         caffe2_update_option(USE_NUMPY ON)
+        # [VEGA-PATCH 65 - 16 ott 2026] torch_python contro gli header di NUMPY 2.
+        # Compilato contro numpy 1.x, torch non funziona con numpy 2; compilato contro
+        # numpy 2 funziona con entrambi. Si cambia solo il bersaglio Python::NumPy, non
+        # _Python_NumPy_INCLUDE_DIR in cache (FindPython lo rimetterebbe su quello
+        # dell'interprete). Spiegazione: C:\LaRuota_workspace\patch_mkl_numpy2.py
+        set(_vega_numpy2 "C:/LaRuota_workspace/numpy2_headers/numpy/_core/include")
+        if(EXISTS "${_vega_numpy2}/numpy/arrayobject.h")
+          set_target_properties(Python::NumPy PROPERTIES
+            INTERFACE_INCLUDE_DIRECTORIES "${_vega_numpy2}")
+          message(STATUS "[VEGA-PATCH 65] torch_python contro numpy 2: ${_vega_numpy2}")
+        else()
+          message(FATAL_ERROR "[VEGA-PATCH 65] header di numpy 2 assenti: ${_vega_numpy2}")
+        endif()
       endif()
     endif()
     # Observers are required in the python build
@@ -1051,9 +1064,14 @@ if(USE_ROCM)
     list(APPEND HIP_CXX_FLAGS -D__HIP_NO_HALF_OPERATORS__=1)
     list(APPEND HIP_CXX_FLAGS -D__HIP_NO_HALF_CONVERSIONS__=1)
     list(APPEND HIP_CXX_FLAGS -DTORCH_HIP_VERSION=${TORCH_HIP_VERSION})
-    list(APPEND HIP_CXX_FLAGS -Wno-shift-count-negative)
-    list(APPEND HIP_CXX_FLAGS -Wno-shift-count-overflow)
-    list(APPEND HIP_CXX_FLAGS -Wno-duplicate-decl-specifier)
+    # [VEGA-PATCH 11 T09:38 18 giu] Flag GCC-style non riconosciuti da MSVC cl.exe
+    # Su Windows i file c10/hip/*.cpp sono compilati da cl.exe non clang/gcc.
+    # Equivalenti MSVC: nessuno (MSVC non genera questi warning).
+    if(NOT MSVC)
+      list(APPEND HIP_CXX_FLAGS -Wno-shift-count-negative)
+      list(APPEND HIP_CXX_FLAGS -Wno-shift-count-overflow)
+      list(APPEND HIP_CXX_FLAGS -Wno-duplicate-decl-specifier)
+    endif()
     list(APPEND HIP_CXX_FLAGS -DCAFFE2_USE_MIOPEN)
     list(APPEND HIP_CXX_FLAGS -DTHRUST_DEVICE_SYSTEM=THRUST_DEVICE_SYSTEM_HIP)
     list(APPEND HIP_CXX_FLAGS -std=c++17)
@@ -1093,6 +1111,32 @@ if(USE_ROCM)
 
     list(APPEND Caffe2_PUBLIC_HIP_DEPENDENCY_LIBS
       roc::hipblas hip::hipfft hip::hiprand roc::hipsparse roc::hipsolver)
+
+    # [VEGA-PATCH 48 31 lug] I target imported roc::rocblas / roc::hipsparse non
+    # producono nessuna -l nel rsp di link (rocblas non e' nemmeno in lista), quindi
+    # i simboli rocblas_gemm_ex / rocblas_gemm_strided_batched_ex /
+    # rocblas_status_to_string usati da tunable/GemmRocblas.h restano undefined.
+    # Agganciamo le import library dei NOSTRI artifact TheRock 7.14 gfx906 per path.
+    # [VEGA-PATCH 64 - 16 ott 2026] rocsolver.lib di ROCm 5.7: la stessa versione della
+    # rocsolver.dll in torch\lib. Serve alle 16 routine *Batched reindirizzate su rocSOLVER
+    # in ATen/hip/HIPBlas.cpp (prima erano TORCH_CHECK(false), VEGA-PATCH 48).
+    set(_vega_rocsolver "C:/Program Files/AMD/ROCm/5.7/lib/rocsolver.lib")
+    if(EXISTS "${_vega_rocsolver}")
+      list(APPEND Caffe2_PUBLIC_HIP_DEPENDENCY_LIBS "${_vega_rocsolver}")
+      message(STATUS "[VEGA-PATCH 64] rocsolver collegata: ${_vega_rocsolver}")
+    else()
+      message(FATAL_ERROR "[VEGA-PATCH 64] rocsolver.lib non trovata: ${_vega_rocsolver}")
+    endif()
+    foreach(_vega_lib rocblas hipsparse MIOpen)
+      set(_vega_lib_path
+          "C:/TheRock_workspace/TheRock/build_gfx906/dist/rocm/lib/${_vega_lib}.lib")
+      if(EXISTS "${_vega_lib_path}")
+        list(APPEND Caffe2_PUBLIC_HIP_DEPENDENCY_LIBS "${_vega_lib_path}")
+        message(STATUS "[VEGA-PATCH 48] link esplicito ${_vega_lib_path}")
+      else()
+        message(WARNING "[VEGA-PATCH 48] manca ${_vega_lib_path}")
+      endif()
+    endforeach()
 
     # ---[ Kernel asserts
     # Kernel asserts is disabled for ROCm by default.
@@ -1232,7 +1276,18 @@ if(USE_GLOO)
     if(USE_CUDA)
       list(APPEND Caffe2_CUDA_DEPENDENCY_LIBS gloo_cuda)
     elseif(USE_ROCM)
-      list(APPEND Caffe2_HIP_DEPENDENCY_LIBS gloo_hip)
+      # [VEGA-PATCH 56 1 ago] solo se il target esiste davvero. Il percorso ROCm di
+      # Gloo passa da gloo_hip_add_library -> hip_add_library, macro del vecchio
+      # FindHIP che questa build non usa (qui HIP e' un linguaggio nativo): il target
+      # non viene creato e il link falliva con "could not open 'gloo_hip.lib'".
+      # Senza gloo_hip resta la Gloo CPU (gloo.lib), che e' quanto serve: i tensori
+      # su GPU passano per la copia su host. Le collettive GPU-dirette non ci sono,
+      # ma su Windows non esiste RCCL, quindi non si perde nulla di raggiungibile.
+      if(TARGET gloo_hip)
+        list(APPEND Caffe2_HIP_DEPENDENCY_LIBS gloo_hip)
+      else()
+        message(STATUS "[VEGA-PATCH 56] gloo_hip non prodotto: si usa la sola Gloo CPU")
+      endif()
     endif()
     add_compile_options(-DCAFFE2_USE_GLOO)
   endif()

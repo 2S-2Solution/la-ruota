@@ -431,6 +431,12 @@ PyTypeObject* GetReduceOpMetaclass() {
 }
 
 PyObject* c10d_init(PyObject* _unused, PyObject* noargs) {
+  // [VEGA-PATCH 57 1 ago] a monte questa funzione non gestisce le eccezioni: se una
+  // registrazione pybind fallisce, l'eccezione esce e il processo TERMINA durante
+  // "import torch", senza stampare nulla. Su Linux non succede mai, quindi nessuno
+  // se n'e' accorto. Qui la convertiamo in una normale eccezione Python, cosi' il
+  // messaggio si vede.
+  try {
   C10_LOG_API_USAGE_ONCE("c10d.python.import");
 
   auto c10d_module = THPObjectPtr(PyImport_ImportModule("torch.distributed"));
@@ -3335,6 +3341,14 @@ such as `dist.all_reduce(tensor, async_op=True)`.
           py::arg("status"));
 
   Py_RETURN_TRUE;
+  // [VEGA-PATCH 57 1 ago] vedi nota all'inizio della funzione
+  } catch (const std::exception& e) {
+    PyErr_Format(PyExc_RuntimeError, "c10d_init fallita: %s", e.what());
+    return nullptr;
+  } catch (...) {
+    PyErr_SetString(PyExc_RuntimeError, "c10d_init fallita: eccezione sconosciuta");
+    return nullptr;
+  }
 }
 
 #undef PROCESS_GROUP_DEPRECATION_WARNING

@@ -1,11 +1,11 @@
-#ifndef THCP_EVENT_INC
+﻿#ifndef THCP_EVENT_INC
 #define THCP_EVENT_INC
 
-#include <ATen/cuda/CUDAEvent.h>
+#include <ATen/hip\HIPEvent.h>
 #include <torch/csrc/python_headers.h>
 
 struct THCPEvent {
-  PyObject_HEAD at::cuda::CUDAEvent cuda_event;
+  PyObject_HEAD at::hip::HIPEvent cuda_event;
 };
 extern PyObject* THCPEventClass;
 

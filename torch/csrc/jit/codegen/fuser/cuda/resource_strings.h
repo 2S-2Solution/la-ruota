@@ -1,3 +1,4 @@
+#include "hip/hip_runtime.h"
 #pragma once
 
 #include <ATen/code_template.h>
@@ -10,7 +11,7 @@ tensor as input. Correct code for this case is generated, however, nvrtc does
 not know how to handle int*_t integer types, so typedefs help it handle those
 cases*/
 
-static constexpr auto bfloat16_type_string = "__nv_bfloat16";
+static constexpr auto bfloat16_type_string = "__hip_bfloat16";
 
 #if defined(USE_ROCM)
 static auto type_declarations_template = at::jit::CodeTemplate(R"(
@@ -63,8 +64,8 @@ struct TensorInfo<T, 0> {
 )");
 #endif
 
-// We rewrite the code for philox RNG from curand as nvrtc couldn't resolve the
-// curand header correctly.
+// We rewrite the code for philox RNG from hiprand as nvrtc couldn't resolve the
+// hiprand header correctly.
 constexpr auto rand_support_literal = R"(
 
   class Philox {
@@ -229,7 +230,7 @@ constexpr auto half_support_literal =
   };
 
   /* All intrinsic functions are only available to nvcc compilers */
-  #if defined(__CUDACC__)
+  #if defined(__HIPCC__)
     /* Definitions of intrinsics */
     __device__ __half __float2half(const float f) {
       __half val;
@@ -251,7 +252,7 @@ constexpr auto half_support_literal =
     // This workaround uses string-pasting to separate the " and the #endif into
     // different strings
     R"(
-  #endif /* defined(__CUDACC__) */
+  #endif /* defined(__HIPCC__) */
 #endif /* defined(__cplusplus) */
 #undef __HALF_TO_US
 #undef __HALF_TO_CUS
@@ -273,10 +274,10 @@ typedef struct __align__(2) {
 __nv_bfloat16_raw;
 
 #if defined(__cplusplus)
-struct __align__(2) __nv_bfloat16 {
-  __host__ __device__ __nv_bfloat16() {}
+struct __align__(2) __hip_bfloat16 {
+  __host__ __device__ __hip_bfloat16() {}
 
-  __host__ __device__ __nv_bfloat16& operator=(const __nv_bfloat16_raw& hr) {
+  __host__ __device__ __hip_bfloat16& operator=(const __nv_bfloat16_raw& hr) {
     __x = hr.x;
     return *this;
   }
@@ -303,8 +304,8 @@ __device__ unsigned short __internal_float2bfloat16(
 }
 
 /* Definitions of intrinsics */
-__device__ __nv_bfloat16 __float2bfloat16(const float a) {
-  __nv_bfloat16 val;
+__device__ __hip_bfloat16 __float2bfloat16(const float a) {
+  __hip_bfloat16 val;
   __nv_bfloat16_raw r;
   unsigned int sign;
   unsigned int remainder;
@@ -317,7 +318,7 @@ __device__ __nv_bfloat16 __float2bfloat16(const float a) {
   return val;
 }
 
-__device__ float __bfloat162float(const __nv_bfloat16 a) {
+__device__ float __bfloat162float(const __hip_bfloat16 a) {
   union
   {
       uint32_t int32;
@@ -340,10 +341,10 @@ typedef struct __align__(2) {
 __nv_bfloat16_raw;
 
 #if defined(__cplusplus)
-struct __align__(2) __nv_bfloat16 {
-  __host__ __device__ __nv_bfloat16() {}
+struct __align__(2) __hip_bfloat16 {
+  __host__ __device__ __hip_bfloat16() {}
 
-  __host__ __device__ __nv_bfloat16& operator=(const __nv_bfloat16_raw& hr) {
+  __host__ __device__ __hip_bfloat16& operator=(const __nv_bfloat16_raw& hr) {
     __x = hr.x;
     return *this;
   }
@@ -352,7 +353,7 @@ struct __align__(2) __nv_bfloat16 {
   unsigned short __x;
 };
 
-#if defined(__CUDACC__)
+#if defined(__HIPCC__)
 __device__ unsigned short __internal_float2bfloat16(
     const float f,
     unsigned int& sign,
@@ -372,8 +373,8 @@ __device__ unsigned short __internal_float2bfloat16(
 }
 
 /* Definitions of intrinsics */
-__device__ __nv_bfloat16 __float2bfloat16(const float a) {
-  __nv_bfloat16 val;
+__device__ __hip_bfloat16 __float2bfloat16(const float a) {
+  __hip_bfloat16 val;
 #if __CUDA_ARCH__ >= 800
   asm("{  cvt.rn.bf16.f32 %0, %1;}\n" : "=h"(__BFLOAT16_TO_US(val)) : "f"(a));
 #else
@@ -390,12 +391,12 @@ __device__ __nv_bfloat16 __float2bfloat16(const float a) {
   return val;
 }
 
-__device__ float __bfloat162float(const __nv_bfloat16 a) {
+__device__ float __bfloat162float(const __hip_bfloat16 a) {
   float val;
   asm("{ mov.b32 %0, {0,%1};}\n" : "=f"(val) : "h"(__BFLOAT16_TO_CUS(a)));
   return val;
 }
-#endif /* defined(__CUDACC__) */
+#endif /* defined(__HIPCC__) */
 #endif /* defined(__cplusplus) */
 #undef __BFLOAT16_TO_US
 #undef __BFLOAT16_TO_CUS

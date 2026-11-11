@@ -1,3 +1,13 @@
+# [VEGA-PATCH T00:14 20 giu] PATH PRIORITY rc.exe per LNK1158 fix torch._C.pyd
+# distutils MSVCCompiler subprocess link.exe non eredita PATH dal cmd wrapper.
+# Patch chirurgica: aggiungo venv_build/bin (= rc.exe + rcdll.dll) all'inizio del PATH
+# BEFORE setup.py importa qualunque distutils module.
+import os as _os_vega_rc_patch
+_os_vega_rc_patch.environ["PATH"] = (
+    r"C:\LaRuota_workspace\venv_build\bin;"
+    + _os_vega_rc_patch.environ.get("PATH", "")
+)
+
 # Welcome to the PyTorch setup.py.
 # Environment variables you are probably interested in:
 #

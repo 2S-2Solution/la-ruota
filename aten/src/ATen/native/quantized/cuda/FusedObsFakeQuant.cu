@@ -7,6 +7,7 @@
 #ifndef AT_PER_OPERATOR_HEADERS
 #include <ATen/Functions.h>
 #else
+#include <ATen/ops/_fused_moving_avg_obs_fq_helper_native.h>
 #include <ATen/ops/aminmax.h>
 #include <ATen/ops/_fake_quantize_per_tensor_affine_cachemask_tensor_qparams.h>
 #include <ATen/ops/fake_quantize_per_channel_affine.h>

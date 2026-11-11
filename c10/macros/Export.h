@@ -144,6 +144,22 @@
 #define TORCH_HIP_API C10_IMPORT
 #endif
 
+// [VEGA-PATCH 46j T21:25 5 lug] TORCH_HIP_CPP_API: hipify di TORCH_CUDA_CPP_API, mancante nella
+// sezione HIP (c'era solo TORCH_HIP_API). Usato dai file .hip generati.
+#if defined(TORCH_HIP_BUILD_MAIN_LIB)
+#define TORCH_HIP_CPP_API C10_EXPORT
+#else
+#define TORCH_HIP_CPP_API C10_IMPORT
+#endif
+
+// [VEGA-PATCH 47 31 lug] TORCH_HIP_CU_API: hipify di TORCH_CUDA_CU_API, mancante come
+// lo era TORCH_HIP_CPP_API. Su ROCm i due target (cpp/cu) sono la stessa libreria.
+#if defined(TORCH_HIP_BUILD_MAIN_LIB)
+#define TORCH_HIP_CU_API C10_EXPORT
+#else
+#define TORCH_HIP_CU_API C10_IMPORT
+#endif
+
 #if defined(TORCH_XPU_BUILD_MAIN_LIB)
 #define TORCH_XPU_API C10_EXPORT
 #else

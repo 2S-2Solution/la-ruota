@@ -1,5 +1,9 @@
 #pragma once
-
+// [VEGA-PATCH 48 1 ago] Guardia classica OLTRE a #pragma once: la junction
+// build/aten/src/ATen/hip -> aten/src/ATen/hip espone questo file con due percorsi
+// assoluti diversi, e #pragma once non deduplica (redefinition dei tipi guard).
+#ifndef ATEN_HIP_IMPL_HIPALLOC_MASQ_H_
+#define ATEN_HIP_IMPL_HIPALLOC_MASQ_H_
 #include <c10/core/Allocator.h>
 #include <c10/core/DeviceType.h>
 
@@ -29,3 +33,5 @@ public:
 };
 
 }} // namespace c10::hip
+
+#endif  // ATEN_HIP_IMPL_HIPALLOC_MASQ_H_

@@ -1,0 +1,4 @@
+# pacchetti di installazione: vanno nelle GitHub Releases, non nel git
+rilasci/
+*.7z
+*.exe

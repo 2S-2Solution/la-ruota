@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #ifdef USE_C10D_NCCL
 
@@ -25,13 +25,13 @@
 #include <torch/csrc/distributed/c10d/intra_node_comm.hpp>
 
 #include <ATen/DynamicLibrary.h>
-#include <ATen/cuda/CUDAContext.h>
-#include <ATen/cuda/CUDAEvent.h>
+#include <ATen/hip\HIPContext.h>
+#include <ATen/hip\HIPEvent.h>
 #include <c10/core/Stream.h>
 #include <c10/core/StreamGuard.h>
-#include <c10/cuda/CUDACachingAllocator.h>
-#include <c10/cuda/CUDAGuard.h>
-#include <c10/cuda/CUDAStream.h>
+#include <ATen/hip/impl/HIPCachingAllocatorMasqueradingAsCUDA.h>
+#include <ATen/hip/impl/HIPGuardImplMasqueradingAsCUDA.h>
+#include <ATen/hip/impl/HIPStreamMasqueradingAsCUDA.h>
 
 #include <torch/custom_class.h>
 
@@ -73,7 +73,7 @@ static std::vector<std::string> TORCH_NCCL_DESYNC_DEBUG = {
 // compute accurate collective timing per-collective. (Note: end-events are
 // recorded by default. Turn on this flag can increase chances of a watchdog
 // hang due to performing a CUDA event query which eventually calls
-// cudaEventElapsedTime() API.
+// hipEventElapsedTime() API.
 static std::vector<std::string> TORCH_NCCL_ENABLE_TIMING = {
     "TORCH_NCCL_ENABLE_TIMING",
     "NCCL_ENABLE_TIMING"};
@@ -346,10 +346,10 @@ class TORCH_API ProcessGroupNCCL : public Backend {
 
     // The start CUDA event of NCCL operator tracking this work item. These
     // start CUDA events are needed by desync debugging if enabled.
-    std::shared_ptr<at::cuda::CUDAEvent> ncclStartEvent_;
+    std::shared_ptr<at::hip::HIPEvent> ncclStartEvent_;
 
     // The end CUDA event of NCCL operator tracking this work item.
-    std::shared_ptr<at::cuda::CUDAEvent> ncclEndEvent_;
+    std::shared_ptr<at::hip::HIPEvent> ncclEndEvent_;
 
     // The NCCL communicator used for this work item.
     std::shared_ptr<NCCLComm> ncclComm_;
@@ -445,7 +445,7 @@ class TORCH_API ProcessGroupNCCL : public Backend {
   class CUDAEventCache {
    public:
     CUDAEventCache();
-    std::shared_ptr<at::cuda::CUDAEvent> create(bool timing);
+    std::shared_ptr<at::hip::HIPEvent> create(bool timing);
     static CUDAEventCache& get();
 
    private:
@@ -453,7 +453,7 @@ class TORCH_API ProcessGroupNCCL : public Backend {
     // NOTE: We intentionaly store raw pointers so that
     // we do not attempt to destroy the event objects on process exit,
     // because cuda may be gone.
-    std::vector<at::cuda::CUDAEvent*>
+    std::vector<at::hip::HIPEvent*>
         eventsArray_[2]; // 0 for timing=false, 1 for timing=true
   };
 
@@ -753,8 +753,8 @@ class TORCH_API ProcessGroupNCCL : public Backend {
   // primitives.  The callbacks have the following signatures:
   //
   //    ncclResult_t fn(at::Tensor& input, at::Tensor& output,
-  //                    ncclComm_t, at::cuda::CUDAStream&);
-  //    void {pre,post}(std::vector<at::cuda::CUDAStream&>);
+  //                    ncclComm_t, c10::hip::HIPStreamMasqueradingAsCUDA&);
+  //    void {pre,post}(std::vector<c10::hip::HIPStreamMasqueradingAsCUDA&>);
   template <typename Fn>
   c10::intrusive_ptr<Work> collective(
       at::Tensor& input,
@@ -1084,10 +1084,10 @@ class TORCH_API ProcessGroupNCCL : public Backend {
   void workEnqueue(c10::intrusive_ptr<ProcessGroupNCCL::WorkNCCL>);
 
   // The CUDA streams used by NCCL kernels
-  std::unordered_map<std::string, at::cuda::CUDAStream> ncclStreams_;
+  std::unordered_map<std::string, c10::hip::HIPStreamMasqueradingAsCUDA> ncclStreams_;
 
   // The CUDA events used to sync NCCL streams
-  std::unordered_map<std::string, at::cuda::CUDAEvent> ncclEvents_;
+  std::unordered_map<std::string, at::hip::HIPEvent> ncclEvents_;
 
   // Device Indexes used for all collectives in this group
   std::set<int> usedDeviceIdxs_;

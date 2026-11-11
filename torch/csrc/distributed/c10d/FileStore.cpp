@@ -32,7 +32,10 @@
 #define LOCK_SH 0x00000010
 #define LOCK_UN 0x00000100
 
-int flock_(int fd, int op) {
+// [VEGA-PATCH 55 1 ago] static: la funzione e' locale al file ma senza prototipo,
+// e la build passa -Werror=missing-prototypes. Con MSVC quel warning non esiste,
+// quindi a monte non si vede; qui si compila con clang-cl e diventa un errore.
+static int flock_(int fd, int op) {
   HANDLE hdl = (HANDLE)_get_osfhandle(fd);
   DWORD low = 1, high = 0;
   OVERLAPPED offset = {0, 0, 0, 0, NULL};

@@ -28,6 +28,8 @@
 #include <ATen/ops/_flash_attention_backward_native.h>
 #include <ATen/ops/_efficient_attention_backward.h>
 #include <ATen/ops/_efficient_attention_backward_native.h>
+#include <ATen/ops/_scaled_dot_product_cudnn_attention_backward_native.h>
+#include <ATen/ops/_scaled_dot_product_efficient_attention_backward_native.h>
 #include <ATen/ops/_scaled_dot_product_flash_attention_backward_native.h>
 #endif
 

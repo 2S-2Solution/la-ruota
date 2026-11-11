@@ -1,0 +1,22 @@
+# Vincoli dell'ambiente LA RUOTA. Usare SEMPRE con: pip install -c vincoli_ruota.txt ...
+#
+# torch: e' LA RUOTA stessa, compilata qui. Se un pacchetto chiede un torch diverso, pip
+# deve FERMARSI, non scaricare il torch ufficiale (che non vede la Radeon VII) al suo posto.
+torch==2.5.0+gita8d6afb
+#
+# numpy: dal 17 ott 2026 torch_python e' compilato contro gli header di numpy 2.2.6
+# (VEGA-PATCH 65), quindi torch funziona con numpy 1.x E 2.x. Si tiene la 2.2.6, la
+# stessa degli header. Prima di salire oltre, rifare verifica_mkl_numpy2.py e i censimenti.
+numpy==2.2.6
+# pyarrow: dalla 22 in su richiede numpy 2 A RUNTIME (i metadati non lo dicono). Con
+# numpy 2 il vincolo non e' piu' necessario, ma la 21 e' quella verificata: si alza solo
+# dopo aver riletto un parquet.
+pyarrow<22
+# accelerate 0.33.0 DICHIARA numpy<2 e `pip check` se ne lamenta, ma con numpy 2.2.6 un
+# passo di addestramento fp16 sulla GPU funziona (verificato 17 ott 2026): e' un vincolo
+# di metadati, non un'incompatibilita'. Non aggiornarla senza riprovare Qwen/LoRA.
+accelerate==0.33.0
+# torchvision: compilato QUI contro la ruota (22 ott 2026, vision_src\compila_torchvision_cpu.cmd),
+# operazioni proprie solo CPU; deform_conv2d sulla GPU con ruota_acceleratori.aggancia_torchvision_gpu().
+# Il torchvision ufficiale si porterebbe dietro il torch ufficiale: pip deve fermarsi.
+torchvision==0.20.0+ruota

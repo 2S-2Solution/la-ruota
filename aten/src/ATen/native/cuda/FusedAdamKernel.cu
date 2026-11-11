@@ -1,5 +1,6 @@
 #define TORCH_ASSERT_ONLY_METHOD_OPERATORS
 #include <ATen/TypeDefault.h>
+#include <ATen/ops/_fused_adam_native.h>  // [VEGA-PATCH 83] senza, la funzione non e' esportata e RegisterCUDA salta a una voce d'import nulla
 #include <ATen/native/ForeachUtils.h>
 #include <c10/util/Exception.h>
 #include <ATen/native/cuda/fused_adam_amsgrad_impl.cuh>

@@ -306,6 +306,28 @@ struct Workspace {
   void* data;
 };
 
+// [VEGA-PATCH 73 - 20 ott 2026] spazio di lavoro per la RICERCA dei solver. getWorkspaceSize
+// con DEFAULT_ALGO restituisce il massimo fra tutti i solver applicabili, e con la cache
+// vuota l'allocazione puo' esaurire la memoria (capitato con 15,86 GB liberi). Se fallisce
+// si dimezza la richiesta, fino a zero: miopenFind* scarta da se' i solver che chiedono
+// piu' spazio di quello dato. Spiegazione: la-ruota/workspace/patch_rnn_ws_sleep.py
+static Workspace vega_workspace_ricerca(size_t richiesto) {
+  size_t dimensione = richiesto;
+  while (true) {
+    try {
+      return Workspace(dimensione);
+    } catch (const c10::OutOfMemoryError&) {
+      if (dimensione == 0) {
+        throw;
+      }
+      dimensione /= 2;
+      if (dimensione < (size_t(1) << 20)) {
+        dimensione = 0;  // sotto 1 MB: solo i solver senza spazio di lavoro
+      }
+    }
+  }
+}
+
 template<typename algo_t>
 struct algorithm_search {
 };
@@ -368,7 +390,7 @@ struct algorithm_search<miopenConvFwdAlgorithm_t> {
     int perf_count;
     perf_t perf_results;
     size_t max_ws_size = getWorkspaceSize(args, DEFAULT_ALGO);
-    Workspace ws(max_ws_size);
+    Workspace ws = vega_workspace_ricerca(max_ws_size);  // [VEGA-PATCH 73]
     MIOPEN_CHECK(miopenFindConvolutionForwardAlgorithm(
         args.handle,
         args.idesc.desc(), args.input.const_data_ptr(),
@@ -441,7 +463,7 @@ struct algorithm_search<miopenConvBwdDataAlgorithm_t> {
     int perf_count;
     perf_t perf_results;
     size_t max_ws_size = getWorkspaceSize(args, DEFAULT_ALGO);
-    Workspace ws(max_ws_size);
+    Workspace ws = vega_workspace_ricerca(max_ws_size);  // [VEGA-PATCH 73]
     MIOPEN_CHECK(miopenFindConvolutionBackwardDataAlgorithm(
         args.handle,
         args.odesc.desc(), args.output.const_data_ptr(),
@@ -514,7 +536,7 @@ struct algorithm_search<miopenConvBwdWeightsAlgorithm_t> {
     int perf_count;
     perf_t perf_results;
     size_t max_ws_size = getWorkspaceSize(args, DEFAULT_ALGO);
-    Workspace ws(max_ws_size);
+    Workspace ws = vega_workspace_ricerca(max_ws_size);  // [VEGA-PATCH 73]
     MIOPEN_CHECK(miopenFindConvolutionBackwardWeightsAlgorithm(
         args.handle,
         args.odesc.desc(), args.output.const_data_ptr(),

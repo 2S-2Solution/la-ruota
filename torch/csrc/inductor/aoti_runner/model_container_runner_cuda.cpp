@@ -1,4 +1,4 @@
-#if !defined(C10_MOBILE) && !defined(ANDROID)
+﻿#if !defined(C10_MOBILE) && !defined(ANDROID)
 #include <torch/csrc/inductor/aoti_runner/model_container_runner_cuda.h>
 
 namespace torch::inductor {
@@ -18,14 +18,14 @@ AOTIModelContainerRunnerCuda::~AOTIModelContainerRunnerCuda() = default;
 
 std::vector<at::Tensor> AOTIModelContainerRunnerCuda::run(
     std::vector<at::Tensor>& inputs) {
-  at::cuda::CUDAStream cuda_stream = c10::cuda::getCurrentCUDAStream();
+  c10::hip::HIPStreamMasqueradingAsCUDA cuda_stream = c10::hip::getCurrentHIPStreamMasqueradingAsCUDA();
   return AOTIModelContainerRunner::run(
       inputs, reinterpret_cast<AOTInductorStreamHandle>(cuda_stream.stream()));
 }
 
 std::vector<at::Tensor> AOTIModelContainerRunnerCuda::run_with_cuda_stream(
     std::vector<at::Tensor>& inputs,
-    at::cuda::CUDAStream cuda_stream) {
+    c10::hip::HIPStreamMasqueradingAsCUDA cuda_stream) {
   return AOTIModelContainerRunner::run(
       inputs, reinterpret_cast<AOTInductorStreamHandle>(cuda_stream.stream()));
 }

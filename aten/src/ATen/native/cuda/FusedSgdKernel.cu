@@ -1,4 +1,5 @@
 #include <ATen/Dispatch.h>
+#include <ATen/ops/_fused_sgd_native.h>  // [VEGA-PATCH 83] senza, la funzione non e' esportata e RegisterCUDA salta a una voce d'import nulla
 #include <ATen/OpMathType.h>
 #include <ATen/core/Tensor.h>
 #include <ATen/native/ForeachUtils.h>
@@ -89,7 +90,8 @@ struct FusedSgdMathFunctor {
     const auto use_faster_load_store =
         (n % kILP == 0) && (chunk_size % kILP == 0) && all_aligned;
     if (use_faster_load_store) {
-      for (auto i_start = threadIdx.x;
+      // [VEGA-PATCH 84] int64_t, non auto: in HIP threadIdx.x e' un oggetto il cui += non modifica
+      for (int64_t i_start = threadIdx.x;
            i_start * kILP < n && i_start * kILP < chunk_size;
            i_start += blockDim.x) {
 #pragma unroll

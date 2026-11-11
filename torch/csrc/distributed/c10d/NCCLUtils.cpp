@@ -1,4 +1,4 @@
-#include <torch/csrc/distributed/c10d/NCCLUtils.hpp>
+﻿#include <torch/csrc/distributed/c10d/NCCLUtils.hpp>
 #include <torch/csrc/distributed/c10d/ProcessGroupNCCL.hpp>
 #include <torch/csrc/distributed/c10d/control_plane/Handlers.hpp>
 
@@ -9,7 +9,7 @@
 #ifdef USE_C10D_NCCL
 #include <vector>
 
-#include <cuda_runtime.h>
+#include <hip/hip_runtime.h>
 #include <mutex>
 
 #include <nlohmann/json.hpp>
@@ -135,7 +135,7 @@ size_t hashTensors(const std::vector<at::Tensor>& tensors) {
         char* dst = (char*)std::calloc(data_size, sizeof(char));
         // This is needed so that we trigger a device synchronization so we can
         // get the collective finished if launched on GPU and hash its output.
-        cudaMemcpy(dst, src, data_size, cudaMemcpyDeviceToHost);
+        hipMemcpy(dst, src, data_size, hipMemcpyDeviceToHost);
         for (size_t i = 0; i < data_size; ++i) {
           // Update the hash for each byte in the tensor
           hash = c10::hash_combine(
@@ -819,8 +819,8 @@ std::unique_ptr<DebugInfoWriter> DebugInfoWriter::writer_ = nullptr;
 std::atomic<bool> DebugInfoWriter::hasWriterRegistered_(false);
 
 float getDurationFromEvent(
-    at::cuda::CUDAEvent& ncclStartEvent,
-    at::cuda::CUDAEvent& ncclEndEvent) {
+    at::hip::HIPEvent& ncclStartEvent,
+    at::hip::HIPEvent& ncclEndEvent) {
   TORCH_CHECK(
       ncclEndEvent.query(),
       "getDuration can only be called after work is succeeded.")

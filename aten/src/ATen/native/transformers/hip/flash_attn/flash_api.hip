@@ -96,7 +96,7 @@ mha_fwd(const at::Tensor &q,         // batch_size x seqlen_q x num_heads x head
         int window_size_right,
         const bool return_softmax,
         std::optional<at::Generator> gen_) {
-  auto stream = at::hip::getCurrentHIPStreamMasqueradingAsCUDA().stream();
+  auto stream = c10::hip::getCurrentHIPStreamMasqueradingAsCUDA().stream();
   check_gpu_arch(stream);
 
   auto q_dtype = q.dtype();
@@ -306,7 +306,7 @@ mha_bwd(const at::Tensor &dout,  // batch_size x seqlen_q x num_heads, x head_si
         const bool deterministic,
         const at::Tensor philox_seed,
         const at::Tensor philox_offset) {
-  auto stream = at::hip::getCurrentHIPStreamMasqueradingAsCUDA().stream();
+  auto stream = c10::hip::getCurrentHIPStreamMasqueradingAsCUDA().stream();
   check_gpu_arch(stream);
 
   bool is_dropout = p_dropout > 0.0;
