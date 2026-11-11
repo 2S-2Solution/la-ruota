@@ -499,8 +499,9 @@ struct ExpandableSegment {
       // choose, and fail rather than fall back. See
       // Note [Expandable Segment Reserved Address].
       std::optional<size_t> requested_addr = std::nullopt,
-      // False for segments imported from fabric handles: HIP rejects host
-      // access on them.
+      // False for segments imported from another process: HIP may reject host
+      // access on them, and tensors rebuilt from IPC handles never read
+      // through the host mapping.
       // TODO: remove this workaround once ROCM-34167 is fixed.
       bool host_access = true)
       : device_(device),
@@ -786,8 +787,7 @@ struct ExpandableSegment {
         std::move(peers),
         header.num_handles,
         /*requested_addr=*/std::nullopt,
-        /*host_access=*/header.handle_type !=
-            Expandable_Segments_Handle_Type::FABRIC_HANDLE);
+        /*host_access=*/false);
 // older build setups (e.g. multiwheels) do not have this syscall, added 2020
 // but the kernel on the system might still support it.
 #ifndef _WIN32
@@ -983,8 +983,8 @@ struct ExpandableSegment {
   void setAccess(c10::DeviceIndex device, size_t begin, size_t end) {
 #if defined(USE_ROCM) && (ROCM_VERSION >= 70200)
     std::array<CUmemAccessDesc, 2> desc{};
-    // HIP rejects host access on memory imported from fabric handles (seen on
-    // ROCm 10.1 through 10.3).
+    // HIP rejects host access on imported memory: fabric imports on ROCm 10.1
+    // through 10.3, and POSIX fd imports on 10.1.
     // TODO: remove this workaround once ROCM-34167 is fixed.
     const int num_desc = host_access_ ? 2 : 1;
     desc[1].location.type = CU_MEM_LOCATION_TYPE_HOST;
