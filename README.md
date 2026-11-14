@@ -6,6 +6,17 @@
 > Il README originale di PyTorch è in [README-PyTorch.md](README-PyTorch.md).
 > PyTorch è opera di Meta Platforms e dei suoi contributori (licenza BSD-3, [LICENSE](LICENSE)).
 
+## Novità: La Ruota 2.15 (novembre 2026)
+
+**PyTorch 2.15.0** per la Radeon VII, sul kit **ROCm 10.1** di AMD e con **MIOpen 3.6** corretta per
+gfx906. Passa tutta la regressione di La Ruota (17 gruppi di prove contro la CPU) senza variabili
+d'ambiente; MKL per la CPU; torchvision 0.30.0a0. Corregge due difetti di PyTorch su ROCm presenti
+anche nella wheel di AMD (softmax fp64 a 32 bit sopra i 1024 elementi, lstsq che non segnala il rango
+non pieno). Richiede il kit [rocm-marconi](https://github.com/2s-2solution/rocm-marconi) 2026.11.14
+o successivo. Sorgenti, patch e istruzioni in [`la-ruota/2.15/`](la-ruota/2.15/LEGGIMI.md); il
+pacchetto `la-ruota-gfx906-2.15-*.exe` è nella pagina Releases. La 2.5.1, descritta qui sotto,
+resta disponibile e può convivere con la 2.15.
+
 ## Cosa fa
 
 **La Ruota** è PyTorch **2.5.1** compilato **in modo nativo per ROCm su Windows** per la
@@ -203,6 +214,16 @@ vedi [la-ruota/NOTICE](la-ruota/NOTICE).
 
 <a name="english"></a>
 # English
+
+**New: La Ruota 2.15 (November 2026)** — **PyTorch 2.15.0** for the Radeon VII on AMD's **ROCm 10.1**
+kit with **MIOpen 3.6** fixed for gfx906. It passes La Ruota's whole regression (17 test groups
+against the CPU) with no environment variables; MKL on the CPU; torchvision 0.30.0a0. It fixes two
+PyTorch-on-ROCm bugs also present in AMD's wheel (fp64 softmax computed with a 32-bit exp above 1024
+elements; lstsq not reporting rank deficiency). Requires the
+[rocm-marconi](https://github.com/2s-2solution/rocm-marconi) kit 2026.11.14 or later. Sources,
+patches and instructions in [`la-ruota/2.15/`](la-ruota/2.15/LEGGIMI.md); the
+`la-ruota-gfx906-2.15-*.exe` package is on the Releases page. The 2.5.1 build described below is
+still available and can coexist with 2.15.
 
 **La Ruota** ("the wheel") is **PyTorch 2.5.1 built natively for ROCm on Windows** for the
 AMD **Radeon VII (gfx906)**, a card AMD no longer supports on Windows and for which no

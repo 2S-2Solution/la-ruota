@@ -1,0 +1,61 @@
+From 554d6970e865acf0b71214aa061b6e0a7dbce17a Mon Sep 17 00:00:00 2001
+From: 2 Solution <info@2solution.it>
+Date: Sun, 15 Nov 2026 00:01:57 +0100
+Subject: [PATCH 2/2] lstsq gels su GPU: rango non pieno segnalato in infos
+
+linalg_lstsq_gels (QR + triangolare, il ramo della matrice singola) ignorava infos: una matrice
+a rango non pieno dava inf/nan senza errore, mentre la CPU e il ramo in lotto sollevano
+LinAlgError. Ora infos riceve l'indice (da 1) del primo zero sulla diagonale di R, come
+LAPACK ?trtrs; lo controlla gia' _linalg_check_errors, senza sincronizzazioni in piu'.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ .../native/cuda/linalg/BatchLinearAlgebra.cpp  | 18 +++++++++++++++++-
+ 1 file changed, 17 insertions(+), 1 deletion(-)
+
+diff --git a/aten/src/ATen/native/cuda/linalg/BatchLinearAlgebra.cpp b/aten/src/ATen/native/cuda/linalg/BatchLinearAlgebra.cpp
+index adaf518..8e278b2 100644
+--- a/aten/src/ATen/native/cuda/linalg/BatchLinearAlgebra.cpp
++++ b/aten/src/ATen/native/cuda/linalg/BatchLinearAlgebra.cpp
+@@ -1389,7 +1389,21 @@ REGISTER_CUDA_DISPATCH(lu_solve_stub, &lu_solve_kernel)
+ 
+ // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ lstsq ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ 
+-void linalg_lstsq_gels(const Tensor& A, const Tensor& B, const Tensor& /*infos*/) {
++// [LA-RUOTA 2.15] Come LAPACK ?trtrs/?gels: info = indice (da 1) del primo zero sulla diagonale di R.
++// Senza, una matrice singola a rango non pieno restituiva inf/nan in silenzio (il ramo in lotto
++// gels_batched_cublas l'errore lo dava gia'). Nessuna sincronizzazione: infos lo controlla il chiamante.
++static void lstsq_gels_infos_da_R(const Tensor& R, const Tensor& infos) {
++  if (!infos.defined() || infos.numel() == 0 || R.size(-1) == 0 || R.size(-2) == 0) {
++    return;
++  }
++  auto zero = R.diagonal(0, -2, -1).eq(0);
++  auto info = zero.to(at::kInt).argmax(-1).add_(1).mul_(zero.any(-1).to(at::kInt));
++  if (info.numel() == infos.numel()) {
++    infos.copy_(info.reshape(infos.sizes()));
++  }
++}
++
++void linalg_lstsq_gels(const Tensor& A, const Tensor& B, const Tensor& infos) {
+   // The steps for using the QR decomposition for solving least squares problems
+   // are outlined here https://en.wikipedia.org/wiki/QR_decomposition#Using_for_solution_to_linear_inverse_problems
+   auto m = A.size(-2);
+@@ -1433,6 +1447,7 @@ void linalg_lstsq_gels(const Tensor& A, const Tensor& B, const Tensor& /*infos*/
+         /*upper=*/true,
+         /*transpose=*/TransposeType::NoTranspose,
+         /*unitriangular=*/false);
++    lstsq_gels_infos_da_R(A_broadcasted, infos);  // [LA-RUOTA 2.15]
+   } else { // underdetermined case
+     Tensor Ah = cloneBatchedColumnMajor(A.mH());
+ 
+@@ -1469,6 +1484,7 @@ void linalg_lstsq_gels(const Tensor& A, const Tensor& B, const Tensor& /*infos*/
+ 
+     // Step 3: X <- Q Z
+     ormqr_kernel(Ah_broadcasted, tau_broadcasted, B, /*left=*/true, /*transpose=*/false);
++    lstsq_gels_infos_da_R(Ah_broadcasted, infos);  // [LA-RUOTA 2.15]
+   }
+ }
+ 
+-- 
+2.54.0.windows.1
+
